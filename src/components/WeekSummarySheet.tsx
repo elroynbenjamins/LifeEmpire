@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, Pressable } from 'react-native';
 import { Colors } from '../theme/colors';
 import { formatCurrency, formatPercent } from '../utils/format';
@@ -16,12 +16,6 @@ export default function WeekSummarySheet() {
   const [showActivityDetails, setShowActivityDetails] = useState(false);
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(12, insets.bottom);
-
-  useEffect(() => {
-    if (showSummary) return;
-    setShowFinancialDetails(false);
-    setShowActivityDetails(false);
-  }, [showSummary]);
 
   if (!showSummary || !summary) return null;
 
