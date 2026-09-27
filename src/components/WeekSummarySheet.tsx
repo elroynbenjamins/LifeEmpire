@@ -6,6 +6,7 @@ import useGameStore from '../store/gameStore';
 import achievementsData from '../data/achievements.json';
 import GameButton from './GameButton';
 import StatusPill from './StatusPill';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function WeekSummarySheet() {
   const showSummary = useGameStore((s) => s?.showSummary);
@@ -13,6 +14,8 @@ export default function WeekSummarySheet() {
   const dismissSummary = useGameStore((s) => s?.dismissSummary);
   const [showFinancialDetails, setShowFinancialDetails] = useState(false);
   const [showActivityDetails, setShowActivityDetails] = useState(false);
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(12, insets.bottom);
 
   useEffect(() => {
     setShowFinancialDetails(false);
@@ -34,7 +37,7 @@ export default function WeekSummarySheet() {
   return (
     <Modal visible transparent animationType="slide">
       <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: bottomInset + 14 }]}>
           <View style={styles.sheetHeader}>
             <View>
               <Text style={styles.eyebrow}>WEEKLY RESULT</Text>
@@ -48,7 +51,7 @@ export default function WeekSummarySheet() {
             />
           </View>
 
-          <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.resultHero}>
               <Text style={styles.resultLabel}>NET CASH FLOW</Text>
               <Text style={[styles.resultValue, { color: netFlow >= 0 ? Colors.primary : Colors.negative }]}>
@@ -480,7 +483,7 @@ export default function WeekSummarySheet() {
             )}
           </ScrollView>
 
-          <GameButton label="Continue" trailingIcon="arrow-forward" onPress={dismissSummary} />
+          <GameButton label="Continue" trailingIcon="arrow-forward" onPress={dismissSummary} style={styles.continueButton} />
         </View>
       </View>
     </Modal>
@@ -504,7 +507,9 @@ const styles = StyleSheet.create({
   sheetHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12 },
   eyebrow: { color: Colors.primary, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   title: { color: Colors.textPrimary, fontSize: 21, fontWeight: '900', marginTop: 2 },
-  scroll: { marginBottom: 14 },
+  scroll: { marginBottom: 10 },
+  scrollContent: { paddingBottom: 4 },
+  continueButton: { marginTop: 2 },
   resultHero: { backgroundColor: Colors.elevated, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: 14, padding: 14, marginBottom: 10 },
   resultLabel: { color: Colors.textMuted, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   resultValue: { fontSize: 28, lineHeight: 34, fontWeight: '900', marginTop: 1 },
