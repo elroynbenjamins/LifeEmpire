@@ -18,9 +18,10 @@ export default function WeekSummarySheet() {
   const bottomInset = Math.max(12, insets.bottom);
 
   useEffect(() => {
+    if (showSummary) return;
     setShowFinancialDetails(false);
     setShowActivityDetails(false);
-  }, [summary?.newWeek]);
+  }, [showSummary]);
 
   if (!showSummary || !summary) return null;
 
