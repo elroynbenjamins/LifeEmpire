@@ -5,7 +5,7 @@
   "expo": {
     "name": "Life Empire",
     "slug": "life-empire",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "orientation": "default",
     "icon": "./assets/life-empire-icon.png",
     "userInterfaceStyle": "automatic",
@@ -22,7 +22,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.elroybenjamins.lifeempire",
-      "versionCode": 213
+      "versionCode": 214
     },
     "web": {
       "favicon": "./assets/life-empire-icon.png",
