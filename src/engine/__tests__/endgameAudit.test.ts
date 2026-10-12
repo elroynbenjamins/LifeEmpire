@@ -64,6 +64,28 @@ audit('endgame accounting audit', () => {
     dead.relationshipState.children.pop();
     expect(getEstateSuccessorId(dead)).toBe('heir');
   });
+  test('siblings receive their net-estate entitlement via cash allocation and a deferred company buyout', async () => {
+    const state = fixture();
+    state.cash = 100000;
+    state.relationshipState.children.push(child('sibling'));
+    const dead = die(state);
+    const preview = getSuccessionPreview(dead, 'heir', 'keep_both')!;
+    const heirShare = dead.relationshipState.estateSettlement.beneficiaries.find(share => share.id === 'heir')!.amount;
+    expect(preview.heirEstateEntitlement).toBe(heirShare);
+    expect(preview.familySettlementDebt).toBeGreaterThan(0);
+    expect(preview.inheritedBusinessValue + preview.inheritedCash + preview.inheritedPropertyValue + preview.inheritedStockValue - preview.familySettlementDebt).toBeCloseTo(heirShare, 0);
+    reset(dead);
+    useGameStore.getState().continueAsChild('heir', 'full', 'keep_both');
+    const next = useGameStore.getState();
+    const familyLoan = next.loans.find(loan => loan.name === 'Family Inheritance Settlement');
+    expect(familyLoan?.remainingAmount).toBe(preview.familySettlementDebt);
+    expect(familyLoan?.weeksRemaining).toBe(200);
+    expect(next.businesses.map(b => b.id)).toContain(state.businesses[0].id);
+    expect(getNetWorth(next)).toBeCloseTo(preview.existingSavings + heirShare - Math.ceil(preview.inheritanceTax * 1.06), 0);
+    await saveGame(next, 2);
+    expect((await loadGame(2))?.loans.some(loan => loan.name === 'Family Inheritance Settlement')).toBe(true);
+  });
+
   test('the chosen child combines pre-owned shares with the parent stake and keeps the holding intact', () => {
     const state = fixture();
     state.relationshipState.estatePlan.successorId = 'other';
