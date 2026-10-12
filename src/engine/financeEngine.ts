@@ -76,7 +76,8 @@ export function getWeeklyCourseCost(state: GameState): number {
 }
 
 export function getWeeklyLoanPayments(state: GameState): number {
-  return (state?.loans ?? []).reduce((total, loan) => total + (loan?.weeklyPayment ?? 0), 0);
+  return (state?.loans ?? []).reduce((total, loan) =>
+    total + Math.min(Math.max(0, loan?.remainingAmount ?? 0), Math.max(0, loan?.weeklyPayment ?? 0)), 0);
 }
 
 export function getTotalWeeklyExpenses(state: GameState): number {
@@ -126,9 +127,12 @@ export function processLoans(state: GameState): { loans: ActiveLoan[]; totalPaid
   let loansRepaid = 0;
   const newLoans: ActiveLoan[] = [];
   for (const loan of state?.loans ?? []) {
-    const payment = loan?.weeklyPayment ?? 0;
+    const outstanding = Math.max(0, loan?.remainingAmount ?? 0);
+    // A rounded scheduled installment may exceed the few euros remaining.
+    // Charge only real outstanding principal/financed balance.
+    const payment = Math.min(outstanding, Math.max(0, loan?.weeklyPayment ?? 0));
     totalPaid += payment;
-    const remaining = (loan?.remainingAmount ?? 0) - payment;
+    const remaining = outstanding - payment;
     const weeksLeft = (loan?.weeksRemaining ?? 1) - 1;
     if (weeksLeft > 0 && remaining > 0) {
       newLoans.push({ ...loan, remainingAmount: Math.max(0, remaining), weeksRemaining: weeksLeft });
