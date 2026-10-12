@@ -891,7 +891,7 @@ describe('expanded relationship progression', () => {
     expect(keepProperty?.inheritanceTax).toBe(liquid?.inheritanceTax);
   });
 
-  it('keeps only designated family businesses outside the liquidated estate split', () => {
+  it('keeps all player-owned companies outside the liquidated estate split', () => {
     const child = {
       id: 'family-biz-child',
       name: 'Mila',
@@ -957,7 +957,7 @@ describe('expanded relationship progression', () => {
       },
     };
     const estate = calculateEstateSettlement(state);
-    expect(estate.businessValue).toBe(500000);
+    expect(estate.businessValue).toBe(1000000);
     expect(estate.successorName).toBe('Mila');
   });
 
