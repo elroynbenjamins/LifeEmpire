@@ -71,31 +71,61 @@ export function ensureAuctions(active: RealEstateAuction[], globalWeek: number, 
   return result;
 }
 
+/** Money already committed to leading auction bids cannot back another bid. */
+export function getReservedAuctionBidTotal(auctions: RealEstateAuction[], excludedAuctionId?: string): number {
+  return (auctions ?? []).reduce((total, auction) =>
+    total + (auction.id !== excludedAuctionId && auction.playerIsHighestBidder ? auction.currentBid : 0), 0);
+}
+
 export function placeAuctionBid(auction: RealEstateAuction, amount: number): RealEstateAuction {
-  if (amount < auction.currentBid + auction.minimumBidIncrease) return auction;
+  if (auction.playerIsHighestBidder || !Number.isFinite(amount) || amount < auction.currentBid + auction.minimumBidIncrease) return auction;
   let currentBid = amount;
   let highest = true;
   const bidders = auction.aiBidders.map((bidder) => ({ ...bidder }));
-  const eligible = bidders.filter((bidder) => bidder.active && bidder.maxBid >= currentBid + auction.minimumBidIncrease);
+  const eligible = bidders.filter((bidder) => bidder.active && bidder.maxBid >= amount + auction.minimumBidIncrease);
+
   if (eligible.length > 0) {
     const bidder = eligible[Math.floor(Math.random() * eligible.length)];
-    const chance = bidder.personality === 'Conservative' ? 0.65 : bidder.personality === 'Professional' ? 0.78 : 0.9;
+    const chance = bidder.personality === 'Conservative' ? 0.65
+      : bidder.personality === 'Professional' ? 0.78
+        : bidder.personality === 'Wealthy Collector' ? 0.95 : 0.9;
     if (Math.random() < chance) {
-      currentBid = Math.min(bidder.maxBid, currentBid + auction.minimumBidIncrease * (1 + Math.floor(Math.random() * 2)));
+      currentBid = Math.min(bidder.maxBid, amount + auction.minimumBidIncrease * (1 + Math.floor(Math.random() * 2)));
       highest = false;
     }
   }
-  bidders.forEach((bidder) => { if (bidder.maxBid < currentBid + auction.minimumBidIncrease) bidder.active = false; });
-  return { ...auction, currentBid, playerHighestBid: Math.max(auction.playerHighestBid, amount), playerIsHighestBidder: highest };
+
+  // Persist dropouts: competitors who cannot afford another minimum raise stay out.
+  const updatedBidders = bidders.map((bidder) => ({
+    ...bidder,
+    active: bidder.active && bidder.maxBid >= currentBid + auction.minimumBidIncrease,
+  }));
+  return {
+    ...auction,
+    currentBid,
+    aiBidders: updatedBidders,
+    playerHighestBid: Math.max(auction.playerHighestBid, amount),
+    playerIsHighestBidder: highest,
+  };
 }
 
 export function leaveAuction(auction: RealEstateAuction): RealEstateAuction {
-  if (!auction.playerIsHighestBidder) return auction;
-  const activeBidder = auction.aiBidders.find((bidder) => bidder.active && bidder.maxBid >= auction.currentBid);
+  if (!auction.playerIsHighestBidder && auction.playerHighestBid === 0) return auction;
+  if (!auction.playerIsHighestBidder) return { ...auction, playerHighestBid: 0 };
+
+  // Withdraw the leading offer. A remaining bidder may match the withdrawn
+  // price; otherwise the auction falls back to its opening bid.
+  const successor = auction.aiBidders.find((bidder) => bidder.active && bidder.maxBid >= auction.currentBid);
+  const currentBid = successor ? auction.currentBid : auction.startingBid;
   return {
     ...auction,
+    playerHighestBid: 0,
     playerIsHighestBidder: false,
-    currentBid: activeBidder ? Math.min(activeBidder.maxBid, auction.currentBid + auction.minimumBidIncrease) : auction.currentBid,
+    currentBid,
+    aiBidders: auction.aiBidders.map((bidder) => ({
+      ...bidder,
+      active: bidder.active && bidder.maxBid >= currentBid + auction.minimumBidIncrease,
+    })),
   };
 }
 
