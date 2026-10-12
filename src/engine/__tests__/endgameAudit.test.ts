@@ -2,6 +2,7 @@ import useGameStore from '../../store/gameStore';
 import { INITIAL_GAME_STATE, INITIAL_PROFILE, INITIAL_RELATIONSHIP_STATE } from '../../types/game';
 import { calculateEstateSettlement, getSuccessionPreview, getEstateSuccessorId } from '../lifecycleEngine';
 import { createAcquiredBusiness, generateAcquisitionTargets } from '../acquisitionEngine';
+import { calculateValuation } from '../businessEngine';
 import { createHoldingCompany } from '../holdingCompanyEngine';
 import { getNetWorth } from '../financeEngine';
 import { initializeStocks, processStocks } from '../stockEngine';
@@ -112,6 +113,8 @@ audit('endgame accounting audit', () => {
     expect(next.loans.find(loan => loan.name === 'Inheritance Tax Loan')?.originalAmount).toBe(preview.loanNeeded);
     expect(next.loans.find(loan => loan.name === 'Existing Personal Debt')?.remainingAmount).toBe(12000);
     expect(next.businesses.find(b => b.id === 'heir_venture_g2_heir')?.valuation).toBe(95000);
+    const successorVenture = next.businesses.find(b => b.id === 'heir_venture_g2_heir')!;
+    expect(calculateValuation(successorVenture)).toBeCloseTo(95000, -3); // Stable on the first operating week.
     expect(next.businesses.find(b => b.id === state.businesses[0].id)?.strategyModifiers?.some(m => m.id === 'succession_modernize_g2')).toBe(true);
     expect(next.statistics.highestNetWorth).toBe(Math.max(0, getNetWorth(next)));
     expect(next.cash).toBe(Math.max(0, preview.existingSavings + preview.inheritedCash - (preview.inheritanceTax - preview.loanNeeded)));
@@ -142,6 +145,8 @@ audit('endgame accounting audit', () => {
     expect(next.age).toBe(18);
     expect(next.year).toBe(state.year + 8);
     expect(next.businesses.some(b => b.id === state.businesses[0].id)).toBe(true);
+    expect(next.businesses[0].nextStrategicDecisionWeek).toBe((state.businesses[0].nextStrategicDecisionWeek ?? 0) + preview.guardianshipWeeks);
+    expect(next.businesses[0].nextCrisisCheckWeek).toBe((state.businesses[0].nextCrisisCheckWeek ?? 0) + preview.guardianshipWeeks);
     expect(next.holdingCompanies.find(h => h.id === 'empty_holding')?.cashReserve).toBe(90000);
     expect(next.generation).toBe(2);
     expect(next.statistics.highestNetWorth).toBe(Math.max(0, getNetWorth(next)));
