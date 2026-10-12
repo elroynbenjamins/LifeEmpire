@@ -2,6 +2,7 @@ import { EstateBeneficiaryShare, EstateSettlement, GameState, LifecycleState, Re
 import { getNetWorth, getPortfolioValue } from './financeEngine';
 import { getPlayerOwnershipPct } from './businessEngine';
 import { getBusinessDebtPrincipal } from './businessDebtEngine';
+import { BASE_BUSINESS_CAPACITY } from './businessCapacityEngine';
 
 export interface LifecycleResult {
   lifecycle: LifecycleState;
@@ -229,6 +230,7 @@ export function getSuccessionPreview(
   childId: string,
   assetStrategy: SuccessionAssetStrategy = 'liquidate',
   inheritanceTaxReduction = 0,
+  availableBusinessSlots = BASE_BUSINESS_CAPACITY,
 ) {
   const child = (state.relationshipState?.children ?? []).find((item) => item.id === childId);
   const estate = state.relationshipState?.estateSettlement;
@@ -239,6 +241,26 @@ export function getSuccessionPreview(
   const existingSavings = Math.max(0, child.savings ?? 0);
   const existingDebt = Math.max(0, child.debt ?? 0);
   const existingVentureValue = Math.max(0, child.businessValue ?? 0);
+  // Off-screen adult-child ventures can become playable companies, but must not
+  // bypass the permanent portfolio capacity paid/unlocked by the player.
+  // If there is no free slot, settle the venture's simulated equity to personal
+  // cash instead of losing it or creating an inaccessible extra company.
+  const parentOwnedHoldings = new Set(
+    (state.businesses ?? [])
+      .filter((business) => getPlayerOwnershipPct(business) > 0)
+      .map((business) => business.holdingCompanyId)
+      .filter(Boolean),
+  );
+  const retainedBusinessCount = (state.businesses ?? []).filter((business) =>
+    getPlayerOwnershipPct(business) > 0
+    || (business.ownership ?? []).some((stake) =>
+      (stake.ownerType === 'child' && stake.ownerId === child.id && stake.percent > 0)
+      || (stake.ownerType === 'family_trust' && stake.percent > 0),
+    )
+    || (!!business.holdingCompanyId && parentOwnedHoldings.has(business.holdingCompanyId)),
+  ).length;
+  const ventureConvertsToCash = existingVentureValue > 0
+    && retainedBusinessCount >= Math.max(BASE_BUSINESS_CAPACITY, Math.min(10, availableBusinessSlots));
   const actualChildAge = childCurrentAge(child, state);
   const guardianshipWeeks = Math.max(0, 18 - actualChildAge) * 20;
   const preparedSuccessor = state.relationshipState?.estatePlan?.successorId === child.id;
@@ -284,7 +306,8 @@ export function getSuccessionPreview(
   const inheritanceTax = Math.max(0, Math.round(
     baseInheritanceTax * (1 - Math.max(0, Math.min(0.07, inheritanceTaxReduction)))
   ));
-  const taxCashAvailable = inheritedCash + existingSavings;
+  const taxCashAvailable = inheritedCash + existingSavings
+    + (ventureConvertsToCash ? existingVentureValue : 0);
   const loanNeeded = Math.max(0, inheritanceTax - taxCashAvailable);
   const parentRelationship = Math.max(0, Math.min(100, child.parentRelationship ?? 75));
   const potential = successionPotential(child);
@@ -298,6 +321,7 @@ export function getSuccessionPreview(
     existingSavings,
     existingDebt,
     existingVentureValue,
+    ventureConvertsToCash,
     existingBusinessStakeValue,
     assetStrategy,
     inheritedCash,
