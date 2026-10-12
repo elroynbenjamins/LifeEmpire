@@ -45,12 +45,12 @@ audit('endgame accounting audit', () => {
     useGameStore.getState().allocateHoldingCapital(state.holdingCompanies[0].id, state.businesses[0].id, 100000, purpose);
     expect(getNetWorth(useGameStore.getState())).toBeCloseTo(before, 2);
   });
-  test('same-name children cannot both inherit the designated business', () => {
+  test('each eligible child preview can carry the companies if that child is chosen to continue', () => {
     const state = fixture();
     state.relationshipState.children = [child('heir', 'Alex'), child('other', 'Alex')];
     const dead = die(state);
     expect(getSuccessionPreview(dead, 'heir')!.inheritedBusinessValue).toBeGreaterThan(0);
-    expect(getSuccessionPreview(dead, 'other')!.inheritedBusinessValue).toBe(0);
+    expect(getSuccessionPreview(dead, 'other')!.inheritedBusinessValue).toBeGreaterThan(0);
   });
   test('legacy name-only estates resolve only a unique heir or saved designation', () => {
     const state = fixture();
@@ -63,7 +63,7 @@ audit('endgame accounting audit', () => {
     dead.relationshipState.children.pop();
     expect(getEstateSuccessorId(dead)).toBe('heir');
   });
-  test('a successor retains pre-owned business shares without being estate successor', () => {
+  test('the chosen child combines pre-owned shares with the parent stake and keeps the holding intact', () => {
     const state = fixture();
     state.relationshipState.estatePlan.successorId = 'other';
     state.relationshipState.children.push(child('other'));
@@ -73,8 +73,8 @@ audit('endgame accounting audit', () => {
     ];
     reset(die(state));
     useGameStore.getState().continueAsChild('heir', true);
-    expect(useGameStore.getState().businesses.find(b => b.id === state.businesses[0].id)?.ownership?.some(s => s.ownerType === 'player' && s.percent === 20)).toBe(true);
-    expect(useGameStore.getState().holdingCompanies[0].cashReserve).toBe(0);
+    expect(useGameStore.getState().businesses.find(b => b.id === state.businesses[0].id)?.ownership?.some(s => s.ownerType === 'player' && s.percent === 100)).toBe(true);
+    expect(useGameStore.getState().holdingCompanies[0].cashReserve).toBe(500000);
     expect(useGameStore.getState().businesses[0].ownership!.reduce((sum, stake) => sum + stake.percent, 0)).toBe(100);
   });
   test('illiquid estate cannot distribute more than its net estate', () => {
