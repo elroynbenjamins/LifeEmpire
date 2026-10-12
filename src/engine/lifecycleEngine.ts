@@ -306,7 +306,8 @@ export function getSuccessionPreview(
   const inheritanceTax = Math.max(0, Math.round(
     baseInheritanceTax * (1 - Math.max(0, Math.min(0.07, inheritanceTaxReduction)))
   ));
-  const taxCashAvailable = inheritedCash + existingSavings;
+  const taxCashAvailable = inheritedCash + existingSavings
+    + (ventureConvertsToCash ? existingVentureValue : 0);
   const loanNeeded = Math.max(0, inheritanceTax - taxCashAvailable);
   const parentRelationship = Math.max(0, Math.min(100, child.parentRelationship ?? 75));
   const potential = successionPotential(child);
