@@ -586,7 +586,12 @@ export interface RealEstateAuction {
   inspectionCostPaid: number;
   tenantStatus: string;
   tenantStatusKnown: boolean;
+  /** Legacy deadline retained only for old save compatibility; auctions now end after live rounds. */
   auctionEndWeek: number;
+  /** Undefined until the player starts a short, interactive bidding session. */
+  liveRound?: number;
+  liveMaxRounds?: number;
+  lastRoundMessage?: string;
   aiBidders: AuctionBidder[];
   playerHighestBid: number;
   playerIsHighestBidder: boolean;
