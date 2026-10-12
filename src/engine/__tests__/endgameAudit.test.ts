@@ -103,7 +103,7 @@ audit('endgame accounting audit', () => {
     const state = fixture();
     state.cash = 0;
     state.holdingCompanies[0].cashReserve = 0;
-    state.relationshipState.children[0] = { ...child('heir'), savings: 4000, debt: 12000, adultStatus: 'entrepreneur', businessValue: 95000 };
+    state.relationshipState.children[0] = { ...child('heir'), savings: 4000, debt: 12000, adultStatus: 'entrepreneur', businessValue: 95000 } as any;
     const dead = die(state);
     const preview = getSuccessionPreview(dead, 'heir', 'keep_both')!;
     reset(dead);
