@@ -128,7 +128,7 @@ describe('real-estate auctions', () => {
     const auction = startLiveAuction(ensureAuctions([], 5, 1, 100_000)[0]);
     expect(auction.liveRound).toBe(0);
     const random = jest.spyOn(Math, 'random').mockReturnValue(0);
-    let current = { ...auction, aiBidders: [{
+    let current: typeof auction = { ...auction, aiBidders: [{
       id: 'wealthy', name: 'Wealthy', personality: 'Professional' as const,
       maxBid: 10_000_000, active: true,
     }] };
