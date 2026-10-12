@@ -223,11 +223,18 @@ export function weeklyTick(state: GameState, prestigeEffects: Record<string, num
     let auction = existing;
     // AI bidders can still react between player visits, but do not jump straight to their maximum.
     if (globalWeek < auction.auctionEndWeek && auction.playerIsHighestBidder && Math.random() < 0.35) {
-      const counter = auction.aiBidders.find((bidder) => bidder.active && bidder.maxBid >= auction.currentBid + auction.minimumBidIncrease);
+      const eligible = auction.aiBidders.filter((bidder) =>
+        bidder.active && bidder.maxBid >= auction.currentBid + auction.minimumBidIncrease);
+      const counter = eligible[Math.floor(Math.random() * eligible.length)];
       if (counter) {
+        const currentBid = Math.min(counter.maxBid, auction.currentBid + auction.minimumBidIncrease);
         auction = {
           ...auction,
-          currentBid: Math.min(counter.maxBid, auction.currentBid + auction.minimumBidIncrease),
+          currentBid,
+          aiBidders: auction.aiBidders.map((bidder) => ({
+            ...bidder,
+            active: bidder.active && bidder.maxBid >= currentBid + auction.minimumBidIncrease,
+          })),
           playerIsHighestBidder: false,
         };
       }
