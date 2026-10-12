@@ -60,11 +60,11 @@ export function generateAuction(globalWeek: number, inflationMultiplier: number,
     startingBid, currentBid: startingBid, minimumBidIncrease: round500(Math.max(1000, marketValue * 0.025)), expectedWeeklyRent: Math.round(property.weeklyRentalIncome * inflationMultiplier * conditionScore / 100),
     conditionScore, conditionKnown: false, estimatedRenovationCostMin: round500(renovation * 0.7), estimatedRenovationCostMax: round500(renovation * 1.35), actualRenovationCost: renovation,
     inspectionPurchased: false, inspectionCostPaid: 0, tenantStatus: property.type === 'land' ? 'Not applicable' : Math.random() < 0.12 ? 'Tenant refusing to leave' : Math.random() < 0.28 ? 'Problem tenant' : Math.random() < 0.62 ? 'Occupied' : 'Vacant', tenantStatusKnown: property.type === 'land',
-    auctionEndWeek: globalWeek + 2 + Math.floor(Math.random() * 3), aiBidders: createBidders(marketValue, auctionType), playerHighestBid: 0, playerIsHighestBidder: false, hiddenIssue, hiddenIssueKnown: false, rareOpportunity,
+    auctionEndWeek: 0, // legacy persisted field; live auctions have no weekly deadline aiBidders: createBidders(marketValue, auctionType), playerHighestBid: 0, playerIsHighestBidder: false, hiddenIssue, hiddenIssueKnown: false, rareOpportunity,
   };
 }
 
-export function ensureAuctions(active: RealEstateAuction[], globalWeek: number, inflation: number, netWorth: number): RealEstateAuction[] {
+export function ensureAuctions(active: RealEstateAuction[], globalWeek: number, inflation: number, netWorth: number, allowRefill = true): RealEstateAuction[] {
   const target = netWorth >= 2_000_000 ? 6 : netWorth >= 500_000 ? 5 : 3;
   // Migrate old weekly auctions without collecting legacy leading bids.
   // Live sessions keep their current round when restoring a save.
@@ -77,7 +77,7 @@ export function ensureAuctions(active: RealEstateAuction[], globalWeek: number, 
         aiBidders: auction.aiBidders.map((bidder) => ({ ...bidder, active: true })),
       }
     : auction);
-  while (result.length < target) result.push(generateAuction(globalWeek, inflation, netWorth));
+  while (allowRefill && result.length < target) result.push(generateAuction(globalWeek, inflation, netWorth));
   return result;
 }
 
