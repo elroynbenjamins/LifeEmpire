@@ -60,14 +60,25 @@ export function generateAuction(globalWeek: number, inflationMultiplier: number,
     startingBid, currentBid: startingBid, minimumBidIncrease: round500(Math.max(1000, marketValue * 0.025)), expectedWeeklyRent: Math.round(property.weeklyRentalIncome * inflationMultiplier * conditionScore / 100),
     conditionScore, conditionKnown: false, estimatedRenovationCostMin: round500(renovation * 0.7), estimatedRenovationCostMax: round500(renovation * 1.35), actualRenovationCost: renovation,
     inspectionPurchased: false, inspectionCostPaid: 0, tenantStatus: property.type === 'land' ? 'Not applicable' : Math.random() < 0.12 ? 'Tenant refusing to leave' : Math.random() < 0.28 ? 'Problem tenant' : Math.random() < 0.62 ? 'Occupied' : 'Vacant', tenantStatusKnown: property.type === 'land',
-    auctionEndWeek: globalWeek + 2 + Math.floor(Math.random() * 3), aiBidders: createBidders(marketValue, auctionType), playerHighestBid: 0, playerIsHighestBidder: false, hiddenIssue, hiddenIssueKnown: false, rareOpportunity,
+    auctionEndWeek: 0, // legacy persisted field; live auctions have no weekly deadline
+    aiBidders: createBidders(marketValue, auctionType), playerHighestBid: 0, playerIsHighestBidder: false, hiddenIssue, hiddenIssueKnown: false, rareOpportunity,
   };
 }
 
-export function ensureAuctions(active: RealEstateAuction[], globalWeek: number, inflation: number, netWorth: number): RealEstateAuction[] {
+export function ensureAuctions(active: RealEstateAuction[], globalWeek: number, inflation: number, netWorth: number, allowRefill = true): RealEstateAuction[] {
   const target = netWorth >= 2_000_000 ? 6 : netWorth >= 500_000 ? 5 : 3;
-  const result = [...active];
-  while (result.length < target) result.push(generateAuction(globalWeek, inflation, netWorth));
+  // Migrate old weekly auctions without collecting legacy leading bids.
+  // Live sessions keep their current round when restoring a save.
+  const result = [...active].map((auction) => auction.liveRound === undefined
+    ? {
+        ...auction,
+        currentBid: auction.startingBid,
+        playerHighestBid: 0,
+        playerIsHighestBidder: false,
+        aiBidders: auction.aiBidders.map((bidder) => ({ ...bidder, active: true })),
+      }
+    : auction);
+  while (allowRefill && result.length < target) result.push(generateAuction(globalWeek, inflation, netWorth));
   return result;
 }
 
@@ -127,6 +138,92 @@ export function leaveAuction(auction: RealEstateAuction): RealEstateAuction {
       active: bidder.active && bidder.maxBid >= currentBid + auction.minimumBidIncrease,
     })),
   };
+}
+
+
+/** Four deliberate player turns replace the former multi-week deadline. */
+export const LIVE_AUCTION_ROUNDS = 4;
+
+export interface LiveAuctionTurn {
+  auction: RealEstateAuction;
+  finished: boolean;
+  won: boolean;
+  message: string;
+}
+
+export interface LiveAuctionOutcome {
+  status: 'ongoing' | 'won' | 'lost' | 'insufficient_cash';
+  propertyName: string;
+  price: number;
+  message: string;
+}
+
+export function startLiveAuction(auction: RealEstateAuction): RealEstateAuction {
+  if (auction.liveRound !== undefined) return auction;
+  return {
+    ...auction,
+    liveRound: 0,
+    liveMaxRounds: LIVE_AUCTION_ROUNDS,
+    currentBid: auction.startingBid,
+    playerHighestBid: 0,
+    playerIsHighestBidder: false,
+    lastRoundMessage: 'The auctioneer has opened the bidding. Choose your first offer or pass.',
+  };
+}
+
+/** One deliberate turn: raise the price or hold, then let one AI rival respond. */
+export function playLiveAuctionTurn(auction: RealEstateAuction, offer: number | null): LiveAuctionTurn | null {
+  if (auction.liveRound === undefined || auction.liveRound >= (auction.liveMaxRounds ?? LIVE_AUCTION_ROUNDS)) return null;
+  if (offer !== null && (
+    auction.playerIsHighestBidder || !Number.isFinite(offer) || offer < auction.currentBid + auction.minimumBidIncrease
+  )) return null;
+
+  let price = offer ?? auction.currentBid;
+  let playerLeading = offer !== null ? true : auction.playerIsHighestBidder;
+  let highestPlayerOffer = offer !== null ? Math.max(auction.playerHighestBid, offer) : auction.playerHighestBid;
+  const nextBid = price + auction.minimumBidIncrease;
+  let bidders = auction.aiBidders.map((bidder) => ({
+    ...bidder,
+    active: bidder.active && bidder.maxBid >= nextBid,
+  }));
+  const eligible = bidders.filter((bidder) => bidder.active);
+  let message = offer !== null
+    ? 'You raised your offer. The auction room is watching.'
+    : playerLeading ? 'You held your leading bid.' : 'You passed this round.';
+
+  if (eligible.length > 0) {
+    const rival = eligible[Math.floor(Math.random() * eligible.length)];
+    const chance = rival.personality === 'Conservative' ? 0.65
+      : rival.personality === 'Professional' ? 0.8
+        : rival.personality === 'Wealthy Collector' ? 0.95 : 0.9;
+    if (Math.random() < chance) {
+      price = Math.min(rival.maxBid, nextBid + (Math.random() < 0.35 ? auction.minimumBidIncrease : 0));
+      playerLeading = false;
+      message = `${rival.name} (${rival.personality}) countered at ${Math.round(price).toLocaleString('en-US')}. ${eligible.length} rival(s) were in contention.`;
+    } else {
+      message = playerLeading ? 'Rivals hesitated. Your bid still leads.' : 'No rival raised this round.';
+    }
+  } else {
+    message = playerLeading ? 'The other bidders dropped out. Your offer stands!' : 'No rival is willing to raise.';
+  }
+
+  bidders = bidders.map((bidder) => ({
+    ...bidder,
+    active: bidder.active && bidder.maxBid >= price + auction.minimumBidIncrease,
+  }));
+  const liveRound = auction.liveRound + 1;
+  const finished = liveRound >= (auction.liveMaxRounds ?? LIVE_AUCTION_ROUNDS)
+    || (playerLeading && bidders.every((bidder) => !bidder.active));
+  const updated: RealEstateAuction = {
+    ...auction,
+    currentBid: price,
+    playerHighestBid: highestPlayerOffer,
+    playerIsHighestBidder: playerLeading,
+    aiBidders: bidders,
+    liveRound,
+    lastRoundMessage: message,
+  };
+  return { auction: updated, finished, won: finished && playerLeading && highestPlayerOffer > 0, message };
 }
 
 export function getInspectionCost(auction: RealEstateAuction): number {
