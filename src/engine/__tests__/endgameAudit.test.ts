@@ -119,6 +119,24 @@ audit('endgame accounting audit', () => {
     expect(next.statistics.highestNetWorth).toBe(Math.max(0, getNetWorth(next)));
     expect(next.cash).toBe(Math.max(0, preview.existingSavings + preview.inheritedCash - (preview.inheritanceTax - preview.loanNeeded)));
   });
+  test('a full business portfolio preserves the heir venture value as cash without unlocking a free slot', () => {
+    const state = fixture();
+    state.relationshipState.children[0] = { ...child('heir'), savings: 7000, adultStatus: 'entrepreneur', businessValue: 80000 } as any;
+    state.businesses.push({ ...state.businesses[0], id: 'inherited-second', name: 'Second Family Company' });
+    const dead = die(state);
+    const preview = getSuccessionPreview(dead, 'heir', 'keep_both')!;
+    expect(preview.ventureConvertsToCash).toBe(true);
+    expect(preview.taxCashAvailable).toBe(preview.existingSavings + preview.inheritedCash + 80000);
+    reset(dead);
+    useGameStore.getState().continueAsChild('heir', true);
+    const next = useGameStore.getState();
+    expect(next.businesses).toHaveLength(2);
+    expect(next.businesses.some(b => b.id === 'heir_venture_g2_heir')).toBe(false);
+    expect(next.businesses.some(b => b.id === 'inherited-second')).toBe(true);
+    expect(next.cash).toBe(preview.existingSavings + preview.inheritedCash + 80000 - (preview.inheritanceTax - preview.loanNeeded));
+    expect(next.loans.find(loan => loan.name === 'Inheritance Tax Loan')?.originalAmount ?? 0).toBe(preview.loanNeeded);
+  });
+
   test('full tax financing remains an intentional alternative to partial financing', () => {
     const state = fixture();
     const dead = die(state);
@@ -144,6 +162,10 @@ audit('endgame accounting audit', () => {
     const next = useGameStore.getState();
     expect(next.age).toBe(18);
     expect(next.year).toBe(state.year + 8);
+    const familyHeir = next.familyTree.people.find(person => person.id === 'person:young')!;
+    expect(familyHeir.age).toBe(18);
+    expect(familyHeir.birthYear).toBe(state.year - preview.childAge);
+    expect(familyHeir.birthYear + familyHeir.age).toBe(next.year);
     expect(next.businesses.some(b => b.id === state.businesses[0].id)).toBe(true);
     expect(next.businesses[0].nextStrategicDecisionWeek).toBe((state.businesses[0].nextStrategicDecisionWeek ?? 0) + preview.guardianshipWeeks);
     expect(next.businesses[0].nextCrisisCheckWeek).toBe((state.businesses[0].nextCrisisCheckWeek ?? 0) + preview.guardianshipWeeks);
