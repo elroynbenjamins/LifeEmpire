@@ -1,4 +1,4 @@
-import { GameState, WeekSummary, LifetimeStatistics, INITIAL_STATISTICS, INITIAL_CAREER_STATE, TriggeredEvent, TempHappinessEffect, PendingInvestment, AuctionResult, RealEstateAuction } from '../types/game';
+import { GameState, WeekSummary, LifetimeStatistics, INITIAL_STATISTICS, INITIAL_CAREER_STATE, TriggeredEvent, TempHappinessEffect, PendingInvestment } from '../types/game';
 import { getEconomicCycleDescription, processEconomy } from './economyEngine';
 import { getPlayerFamilyWorkFraction, processRelationships } from './relationshipEngine';
 import { processLifecycle } from './lifecycleEngine';
@@ -16,7 +16,7 @@ import { calculateValuation, processAllBusinesses } from './businessEngine';
 import { processSkillGrowth, applyEducationRewards } from './skillEngine';
 import { processCareerTick, getCareerSalary, recordCareerLevel } from './careerEngine';
 import { processProperties } from './propertyEngine';
-import { auctionToProperty, ensureAuctions } from './auctionEngine';
+import { ensureAuctions } from './auctionEngine';
 import { processCompetitors } from './competitorEngine';
 import jobsData from '../data/jobs.json';
 import housingData from '../data/housing.json';
@@ -215,52 +215,12 @@ export function weeklyTick(state: GameState, prestigeEffects: Record<string, num
   const propertyNetIncome = propResult.totalIncome - propResult.totalMaintenance;
   newCash += propertyNetIncome;
 
-  // ---------- Step 12.4: Real-estate auctions ----------
-  const auctionResults: AuctionResult[] = [];
-  const auctionProperties = [...propResult.updatedProperties];
-  const openAuctions: RealEstateAuction[] = [];
-  for (const existing of state.activeAuctions ?? []) {
-    let auction = existing;
-    // AI bidders can still react between player visits, but do not jump straight to their maximum.
-    if (globalWeek < auction.auctionEndWeek && auction.playerIsHighestBidder && Math.random() < 0.35) {
-      const eligible = auction.aiBidders.filter((bidder) =>
-        bidder.active && bidder.maxBid >= auction.currentBid + auction.minimumBidIncrease);
-      const counter = eligible[Math.floor(Math.random() * eligible.length)];
-      if (counter) {
-        const currentBid = Math.min(counter.maxBid, auction.currentBid + auction.minimumBidIncrease);
-        auction = {
-          ...auction,
-          currentBid,
-          aiBidders: auction.aiBidders.map((bidder) => ({
-            ...bidder,
-            active: bidder.active && bidder.maxBid >= currentBid + auction.minimumBidIncrease,
-          })),
-          playerIsHighestBidder: false,
-        };
-      }
-    }
-    if (globalWeek < auction.auctionEndWeek) {
-      openAuctions.push(auction);
-      continue;
-    }
-    const won = auction.playerIsHighestBidder && auction.playerHighestBid > 0 && newCash >= auction.currentBid;
-    if (won) {
-      newCash -= auction.currentBid;
-      auctionProperties.push(auctionToProperty(auction, newWeek, newYear));
-    }
-    if (auction.playerHighestBid > 0) {
-      auctionResults.push({
-        auctionId: auction.id,
-        propertyName: auction.propertyName,
-        won,
-        winningBid: auction.currentBid,
-        playerBid: auction.playerHighestBid,
-        estimatedMarketValue: auction.marketValue,
-        reason: won ? undefined : auction.playerIsHighestBidder ? 'insufficient_cash' : 'outbid',
-      });
-    }
-  }
-  const activeAuctions = ensureAuctions(openAuctions, globalWeek, economy.inflationMultiplier, getNetWorth(stateWithInflation));
+  // ---------- Step 12.4: Real-estate auction catalogue ----------
+  // Bidding sessions settle immediately in the property store, never on the
+  // weekly tick. Empty catalogue slots refresh when the player advances time.
+  const auctionProperties = propResult.updatedProperties;
+  const auctionResults: import('../types/game').AuctionResult[] = [];
+  const activeAuctions = ensureAuctions(state.activeAuctions ?? [], globalWeek, economy.inflationMultiplier, getNetWorth(stateWithInflation));
 
   // Life events removed
   let triggeredEvent: TriggeredEvent | null = null;
