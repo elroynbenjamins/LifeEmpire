@@ -639,7 +639,7 @@ const useGameStore = create<GameStore>((set, get) => ({
         migrateAcquiredBusinessAssets(business, merged.inflationMultiplier, loadGlobalWeek)
       );
       merged.competitors = Object.fromEntries(merged.businesses.map((business) => [business.id, migrateBusinessCompetitors(business, merged.competitors[business.id] ?? [], loadGlobalWeek)]));
-      merged.activeAuctions = ensureAuctions(merged.activeAuctions, ((merged.year - 1) * 20) + merged.week, merged.inflationMultiplier, getNetWorth(merged));
+      merged.activeAuctions = ensureAuctions(merged.activeAuctions, ((merged.year - 1) * 20) + merged.week, merged.inflationMultiplier, getNetWorth(merged), false);
       merged.familyTree = syncFamilyTree(merged);
       // Migrate legacy profile
       if (profile && typeof (profile as any).prestigePoints === 'undefined') {
@@ -893,7 +893,7 @@ const useGameStore = create<GameStore>((set, get) => ({
         migrateAcquiredBusinessAssets(business, merged.inflationMultiplier, slotGlobalWeek)
       );
       merged.competitors = Object.fromEntries(merged.businesses.map((business) => [business.id, migrateBusinessCompetitors(business, merged.competitors[business.id] ?? [], slotGlobalWeek)]));
-      merged.activeAuctions = ensureAuctions(merged.activeAuctions, ((merged.year - 1) * 20) + merged.week, merged.inflationMultiplier, getNetWorth(merged));
+      merged.activeAuctions = ensureAuctions(merged.activeAuctions, ((merged.year - 1) * 20) + merged.week, merged.inflationMultiplier, getNetWorth(merged), false);
       merged.familyTree = syncFamilyTree(merged);
       const slotMeta = await loadAllSlotMeta();
       const currentProfile = get().profile;
