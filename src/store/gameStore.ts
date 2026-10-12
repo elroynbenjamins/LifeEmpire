@@ -8,7 +8,7 @@ import { getEconomicCycleEffects, getPropertyCyclePurchaseMultiplier, inflated }
 import { BUSINESS_PROJECT_SLOT_2_GEM_COST, BUSINESS_UPGRADE_SLOT_2_GEM_COST, getBusinessUpgradeSlotLimit, getBusinessUpgradeWeeks } from '../engine/businessEngine';
 import { createBusiness, generateCandidates, candidateToEmployee, getBusinessType, getUpgrade, calculateValuation, getTotalBusinessValue, getPlayerOwnershipPct, applyMoraleAction, startTraining, startProject, resolveRetention, MIN_EMPLOYEES_REQUIRED, canStartBusinessExpansion, getBusinessLocationTemplate, getScaledLocationCosts, getBusinessDecisionChoiceCost, getAutomaticStrategicDecisionChoice } from '../engine/businessEngine';
 import { createProperty, renovateProperty, getTotalPropertyValue } from '../engine/propertyEngine';
-import { ensureAuctions, getInspectionCost, inspectAuction, leaveAuction, placeAuctionBid } from '../engine/auctionEngine';
+import { ensureAuctions, getInspectionCost, getReservedAuctionBidTotal, inspectAuction, leaveAuction, placeAuctionBid } from '../engine/auctionEngine';
 import { unlockPrestige, getPrestigeEffects } from '../engine/prestigeEngine';
 import { calculateChildInheritanceTax, getSuccessionPreview } from '../engine/lifecycleEngine';
 import { createInitialFamilyTree, syncFamilyTree, transitionFamilyTreeToChild } from '../engine/familyTreeEngine';
@@ -3335,7 +3335,7 @@ const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const globalWeek = ((state.year - 1) * 20) + state.week;
     const auction = (state.activeAuctions ?? []).find((item) => item.id === auctionId);
-    if (!auction || globalWeek >= auction.auctionEndWeek || amount > state.cash || amount < auction.currentBid + auction.minimumBidIncrease) return;
+    if (!auction || globalWeek >= auction.auctionEndWeek || auction.playerIsHighestBidder || !Number.isFinite(amount) || amount > state.cash - getReservedAuctionBidTotal(state.activeAuctions, auctionId) || amount < auction.currentBid + auction.minimumBidIncrease) return;
     const activeAuctions = state.activeAuctions.map((item) => item.id === auctionId ? placeAuctionBid(item, amount) : item);
     set({ activeAuctions });
     saveGame(extractGameState({ ...state, activeAuctions }), state.activeSlot);
@@ -3346,7 +3346,7 @@ const useGameStore = create<GameStore>((set, get) => ({
     const auction = (state.activeAuctions ?? []).find((item) => item.id === auctionId);
     if (!auction || auction.inspectionPurchased) return;
     const cost = getInspectionCost(auction);
-    if (state.cash < cost) return;
+    if (state.cash - getReservedAuctionBidTotal(state.activeAuctions) < cost) return;
     const activeAuctions = state.activeAuctions.map((item) => item.id === auctionId ? { ...inspectAuction(item), inspectionCostPaid: cost } : item);
     const updates = { cash: state.cash - cost, activeAuctions };
     set(updates);
