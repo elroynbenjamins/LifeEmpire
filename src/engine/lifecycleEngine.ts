@@ -71,7 +71,23 @@ function allocateEstateShares(
     }
   }
 
-  return shares;
+  // Integer-currency allocations must conserve the estate exactly. Round
+  // down first, then assign leftover euros by descending fractional remainder.
+  const raw = shares.map((item, index) => ({
+    index,
+    exact: netEstate * item.share,
+    floor: Math.floor(netEstate * item.share),
+  }));
+  let cents = Math.max(0, Math.round(netEstate) - raw.reduce((total, item) => total + item.floor, 0));
+  const largestRemainders = [...raw].sort((a, b) =>
+    (b.exact - b.floor) - (a.exact - a.floor) || a.index - b.index
+  );
+  for (const item of largestRemainders) {
+    if (cents <= 0) break;
+    raw[item.index].floor += 1;
+    cents -= 1;
+  }
+  return shares.map((item, index) => ({ ...item, amount: raw[index].floor }));
 }
 
 /** Old saves may only have a name. Never resolve an ambiguous name to an heir. */
@@ -108,9 +124,7 @@ export function calculateEstateSettlement(state: GameState): EstateSettlement {
   const successorId = state.relationshipState?.estatePlan?.successorId ?? null;
   const eligibleSuccessors: Array<{ id: string; name: string }> = [];
   if (spouse) eligibleSuccessors.push({ id: spouse.id, name: spouse.name });
-  for (const child of children) {
-    if (childCurrentAge(child, state) >= 18) eligibleSuccessors.push({ id: child.id, name: child.name });
-  }
+  for (const child of children) eligibleSuccessors.push({ id: child.id, name: child.name });
   const successorName = eligibleSuccessors.find((item) => item.id === successorId)?.name ?? null;
   // Companies are durable dynasty assets. Any equity still owned by the player
   // is reserved for succession, regardless of whether the company was manually
@@ -135,11 +149,12 @@ export function calculateEstateSettlement(state: GameState): EstateSettlement {
     : 0;
   const businessValue = Math.max(0, grossBusinessValue - businessSettlementDebt);
 
-  // Business equity is reserved from the residual cash estate even if no heir
-  // was pre-designated. The child selected on the succession screen becomes the
-  // new controller, so continuity does not depend on a pre-death checkbox.
-  const distributableEstate = Math.max(0, netEstate - businessValue);
-  const beneficiaries = allocateEstateShares(state, spouse, children, distributableEstate);
+  // Every beneficiary is entitled to a share of the entire NET estate,
+  // including business equity. The playable heir keeps operational ownership
+  // of the companies; any imbalance is reconciled as a family buyout note
+  // rather than a forced sale. Legacy saved estate snapshots keep their prior
+  // liquid-residual allocation for backwards compatibility.
+  const beneficiaries = allocateEstateShares(state, spouse, children, netEstate);
 
   return {
     grossEstate,
@@ -147,6 +162,7 @@ export function calculateEstateSettlement(state: GameState): EstateSettlement {
     administrationCost,
     netEstate,
     beneficiaries,
+    allocationBasis: 'net_estate',
     successorName,
     successorId: successorName ? successorId : null,
     businessSettlementDebt,
@@ -237,7 +253,23 @@ export function getSuccessionPreview(
   if (!child || !estate) return null;
 
   const beneficiary = (estate.beneficiaries ?? []).find((item) => item.id === childId);
-  const distributableShare = Math.max(0, beneficiary?.amount ?? 0);
+  const fullEstateEntitlement = Math.max(0, beneficiary?.amount ?? 0);
+  const equitableAllocation = estate.allocationBasis === 'net_estate';
+  const netEstate = Math.max(0, estate.netEstate ?? 0);
+  const netBusinessValue = Math.max(0, Math.min(estate.businessValue ?? 0, netEstate));
+  // Under the new full-estate allocation, the child receives businesses IN KIND.
+  // Their cash entitlement is reduced by that value. If the businesses are
+  // worth more than their target share, they owe the difference to the other
+  // heirs, without ever having to liquidate company operations.
+  const distributableShare = equitableAllocation
+    ? Math.max(0, fullEstateEntitlement - netBusinessValue)
+    : fullEstateEntitlement;
+  const familySettlementDebt = equitableAllocation
+    ? Math.max(0, netBusinessValue - fullEstateEntitlement)
+    : 0;
+  const otherBeneficiaryCash = equitableAllocation
+    ? Math.max(0, netEstate - netBusinessValue - distributableShare)
+    : Math.max(0, netEstate - netBusinessValue - distributableShare);
   const existingSavings = Math.max(0, child.savings ?? 0);
   const existingDebt = Math.max(0, child.debt ?? 0);
   const existingVentureValue = Math.max(0, child.businessValue ?? 0);
@@ -301,7 +333,12 @@ export function getSuccessionPreview(
   remainingShare = Math.max(0, remainingShare - inheritedStockValue);
   const inheritedCash = remainingShare;
 
-  const inheritanceTaxBase = distributableShare + inheritedBusinessValue;
+  // Family equalisation is a liability, not a second inheritance. It is
+  // deducted from taxable inherited wealth, so the heir's effective benefit
+  // equals the estate-plan entitlement.
+  const inheritanceTaxBase = Math.max(0,
+    distributableShare + inheritedBusinessValue - familySettlementDebt
+  );
   const baseInheritanceTax = calculateChildInheritanceTax(inheritanceTaxBase);
   const inheritanceTax = Math.max(0, Math.round(
     baseInheritanceTax * (1 - Math.max(0, Math.min(0.07, inheritanceTaxReduction)))
@@ -329,6 +366,11 @@ export function getSuccessionPreview(
     inheritedPropertyValue,
     inheritedPropertyIds,
     inheritedBusinessValue,
+    heirEstateEntitlement: equitableAllocation
+      ? fullEstateEntitlement
+      : fullEstateEntitlement + inheritedBusinessValue,
+    otherBeneficiaryCash,
+    familySettlementDebt,
     inheritsBusinesses,
     businessSettlementDebt,
     inheritanceTaxBase,
