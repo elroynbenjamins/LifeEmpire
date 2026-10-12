@@ -159,6 +159,8 @@ export interface SuccessionPreview {
   existingSavings: number;
   existingDebt: number;
   existingVentureValue: number;
+  /** Venture equity is paid out as cash when inherited companies fill all permanent slots. */
+  ventureConvertsToCash: boolean;
   guardianshipWeeks: number;
   preparedSuccessor: boolean;
   existingBusinessStakeValue: number;
