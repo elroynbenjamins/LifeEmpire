@@ -97,7 +97,7 @@ export default function SuccessionScreen() {
 
                 {(estate.beneficiaries ?? []).length > 0 && (
                   <>
-                    <Text style={styles.subheading}>Beneficiaries</Text>
+                    <Text style={styles.subheading}>{estate.allocationBasis === 'net_estate' ? 'Target family shares (whole estate)' : 'Beneficiaries'}</Text>
                     {estate.beneficiaries.map((beneficiary) => (
                       <View key={beneficiary.id} style={styles.beneficiary}>
                         <View style={{ flex: 1 }}>
@@ -128,6 +128,9 @@ export default function SuccessionScreen() {
                       {estate.businessValue > 0 ? ` ${formatCurrency(estate.businessValue)} of business equity is reserved for the next generation.` : ''}
                       {estate.successorName ? ` ${estate.successorName} was your planned successor, but you can still choose another eligible child now.` : ''}
                     </Text>
+                    {estate.allocationBasis === 'net_estate' && (estate.beneficiaries ?? []).length > 1 && (
+                      <Text style={styles.meta}>Spouse and other children keep their estate entitlements. When company equity exceeds the chosen heir's share, a 200-week interest-free family settlement replaces a forced sale.</Text>
+                    )}
                     <Text style={styles.meta}>{inheritedCompanies.length} player-owned companies • {formatCurrency(independentHoldingsCash)} in holding reserves</Text>
                   </View>
                 )}
@@ -233,6 +236,8 @@ export default function SuccessionScreen() {
               </View>
 
               <Text style={styles.subheading}>Result</Text>
+              <MoneyRow label="Estate-plan entitlement" value={preview.heirEstateEntitlement} strong />
+              {preview.otherBeneficiaryCash > 0 && <MoneyRow label="Cash reserved for other heirs" value={preview.otherBeneficiaryCash} />}
               <MoneyRow label="Existing savings" value={preview.existingSavings} />
               {preview.existingDebt > 0 && <MoneyRow label="Existing personal debt" value={-preview.existingDebt} negative />}
               {preview.existingVentureValue > 0 && <MoneyRow label={preview.ventureConvertsToCash ? 'Venture paid out in cash' : 'Independent venture retained'} value={preview.existingVentureValue} />}
@@ -260,12 +265,18 @@ export default function SuccessionScreen() {
               {preview.businessSettlementDebt > 0 && (
                 <Text style={styles.meta}>Unpaid estate costs of {formatCurrency(preview.businessSettlementDebt)} are already deducted from your inherited business equity. They will be repaid over 80 weeks without interest.</Text>
               )}
+              {preview.familySettlementDebt > 0 && (
+                <>
+                  <MoneyRow label="Settlement due to other heirs" value={-preview.familySettlementDebt} negative />
+                  <Text style={styles.meta}>The playable heir retains all company operations, but owes this balancing payment to their spouse/other siblings. Interest-free repayments over 200 game weeks; no company sale required.</Text>
+                </>
+              )}
               {preview.loanNeeded > 0 && <MoneyRow label="Minimum financing need" value={preview.loanNeeded} />}
 
               {preview.preparedSuccessor && preview.inheritsBusinesses && <Text style={styles.meta}>Prepared successor: minor 20-week employee-morale stability bonus.</Text>}
               <View style={styles.taxNote}>
                 <Text style={styles.taxNoteText}>
-                  Tax is based on inherited value, not on whether assets are sold. Existing personal savings can be used to pay it.
+                  Tax is based on the heir's net entitlement after family settlement, not on whether assets are sold. Existing personal savings can be used to pay it.
                   {inheritanceTaxReduction > 0 ? ` Legacy Planning reduces this tax by ${Math.round(inheritanceTaxReduction * 100)}%.` : ''}
                 </Text>
               </View>
