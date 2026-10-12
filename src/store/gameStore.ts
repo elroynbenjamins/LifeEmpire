@@ -8,7 +8,8 @@ import { getEconomicCycleEffects, getPropertyCyclePurchaseMultiplier, inflated }
 import { BUSINESS_PROJECT_SLOT_2_GEM_COST, BUSINESS_UPGRADE_SLOT_2_GEM_COST, getBusinessUpgradeSlotLimit, getBusinessUpgradeWeeks } from '../engine/businessEngine';
 import { createBusiness, generateCandidates, candidateToEmployee, getBusinessType, getUpgrade, calculateValuation, getTotalBusinessValue, getPlayerOwnershipPct, applyMoraleAction, startTraining, startProject, resolveRetention, MIN_EMPLOYEES_REQUIRED, canStartBusinessExpansion, getBusinessLocationTemplate, getScaledLocationCosts, getBusinessDecisionChoiceCost, getAutomaticStrategicDecisionChoice } from '../engine/businessEngine';
 import { createProperty, renovateProperty, getTotalPropertyValue } from '../engine/propertyEngine';
-import { ensureAuctions, getInspectionCost, getReservedAuctionBidTotal, inspectAuction, leaveAuction, placeAuctionBid } from '../engine/auctionEngine';
+import { auctionToProperty, ensureAuctions, getInspectionCost, inspectAuction, playLiveAuctionTurn, startLiveAuction } from '../engine/auctionEngine';
+import type { LiveAuctionOutcome } from '../engine/auctionEngine';
 import { unlockPrestige, getPrestigeEffects } from '../engine/prestigeEngine';
 import { calculateChildInheritanceTax, getSuccessionPreview } from '../engine/lifecycleEngine';
 import { createInitialFamilyTree, syncFamilyTree, transitionFamilyTreeToChild } from '../engine/familyTreeEngine';
@@ -244,7 +245,8 @@ interface GameStore extends GameState {
   sellProperty: (propertyId: string) => void;
   togglePropertyRental: (propertyId: string) => void;
   renovatePropertyAction: (propertyId: string) => void;
-  placePropertyAuctionBid: (auctionId: string, amount: number) => void;
+  startPropertyAuctionSession: (auctionId: string) => boolean;
+  playPropertyAuctionRound: (auctionId: string, amount: number | null) => LiveAuctionOutcome | null;
   inspectPropertyAuction: (auctionId: string) => void;
   leavePropertyAuction: (auctionId: string) => void;
 
@@ -3347,14 +3349,53 @@ const useGameStore = create<GameStore>((set, get) => ({
     saveGame(extractGameState({ ...state, ...updates }), state.activeSlot);
   },
 
-  placePropertyAuctionBid: (auctionId: string, amount: number) => {
+  startPropertyAuctionSession: (auctionId: string) => {
     const state = get();
-    const globalWeek = ((state.year - 1) * 20) + state.week;
     const auction = (state.activeAuctions ?? []).find((item) => item.id === auctionId);
-    if (!auction || globalWeek >= auction.auctionEndWeek || auction.playerIsHighestBidder || !Number.isFinite(amount) || amount > state.cash - getReservedAuctionBidTotal(state.activeAuctions, auctionId) || amount < auction.currentBid + auction.minimumBidIncrease) return;
-    const activeAuctions = state.activeAuctions.map((item) => item.id === auctionId ? placeAuctionBid(item, amount) : item);
+    if (!auction) return false;
+    // Keep only one live session per save to avoid overlapping obligations.
+    if (state.activeAuctions.some((item) => item.id !== auctionId && item.liveRound !== undefined)) return false;
+    if (auction.liveRound !== undefined) return true;
+    const activeAuctions = state.activeAuctions.map((item) =>
+      item.id === auctionId ? startLiveAuction(item) : item);
     set({ activeAuctions });
     saveGame(extractGameState({ ...state, activeAuctions }), state.activeSlot);
+    return true;
+  },
+
+  playPropertyAuctionRound: (auctionId: string, amount: number | null) => {
+    const state = get();
+    const auction = (state.activeAuctions ?? []).find((item) => item.id === auctionId);
+    if (!auction || auction.liveRound === undefined || (amount !== null && (amount > state.cash || !Number.isFinite(amount)))) return null;
+    const turn = playLiveAuctionTurn(auction, amount);
+    if (!turn) return null;
+    const price = turn.auction.currentBid;
+    let status: LiveAuctionOutcome['status'] = 'ongoing';
+    let properties = state.properties;
+    let cash = state.cash;
+    if (turn.finished) {
+      if (turn.won && state.cash >= price) {
+        status = 'won';
+        cash -= price;
+        properties = [...state.properties, auctionToProperty(turn.auction, state.week, state.year)];
+      } else {
+        status = turn.won ? 'insufficient_cash' : 'lost';
+      }
+    }
+    // Catalogue space is only replenished on the next in-game week, not after
+    // every attempt: this prevents endless free auction rerolls.
+    const activeAuctions = turn.finished
+      ? state.activeAuctions.filter((item) => item.id !== auctionId)
+      : state.activeAuctions.map((item) => item.id === auctionId ? turn.auction : item);
+    const updates = { activeAuctions, cash, properties };
+    set(updates);
+    saveGame(extractGameState({ ...state, ...updates }), state.activeSlot);
+    return {
+      status,
+      propertyName: auction.propertyName,
+      price,
+      message: turn.message,
+    };
   },
 
   inspectPropertyAuction: (auctionId: string) => {
@@ -3362,7 +3403,7 @@ const useGameStore = create<GameStore>((set, get) => ({
     const auction = (state.activeAuctions ?? []).find((item) => item.id === auctionId);
     if (!auction || auction.inspectionPurchased) return;
     const cost = getInspectionCost(auction);
-    if (state.cash - getReservedAuctionBidTotal(state.activeAuctions) < cost) return;
+    if (state.cash < cost) return;
     const activeAuctions = state.activeAuctions.map((item) => item.id === auctionId ? { ...inspectAuction(item), inspectionCostPaid: cost } : item);
     const updates = { cash: state.cash - cost, activeAuctions };
     set(updates);
@@ -3371,7 +3412,10 @@ const useGameStore = create<GameStore>((set, get) => ({
 
   leavePropertyAuction: (auctionId: string) => {
     const state = get();
-    const activeAuctions = (state.activeAuctions ?? []).map((item) => item.id === auctionId ? leaveAuction(item) : item);
+    const auction = (state.activeAuctions ?? []).find((item) => item.id === auctionId);
+    if (!auction) return;
+    // A skipped lot closes this session. Fresh opportunities appear next week.
+    const activeAuctions = state.activeAuctions.filter((item) => item.id !== auctionId);
     set({ activeAuctions });
     saveGame(extractGameState({ ...state, activeAuctions }), state.activeSlot);
   },
