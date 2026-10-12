@@ -16,7 +16,6 @@ import { getTotalPropertyValue, getPropertyWeeklyRent } from '../src/engine/prop
 import { getPrestigeEffects } from '../src/engine/prestigeEngine';
 import propertiesData from '../src/data/properties.json';
 import { showGameDialog } from '../src/components/GameDialog';
-import { getInspectionCost, getReservedAuctionBidTotal } from '../src/engine/auctionEngine';
 import { propertyItemImages } from '../src/assets/itemImages';
 
 export default function PropertiesScreen() {
@@ -26,20 +25,13 @@ export default function PropertiesScreen() {
   const rentBonus = getPrestigeEffects(profile).property_income ?? 0;
   const properties = useGameStore((s) => s?.properties ?? []);
   const inflationMultiplier = useGameStore((s) => s?.inflationMultiplier ?? 1);
-  const week = useGameStore((s) => s?.week ?? 1);
-  const year = useGameStore((s) => s?.year ?? 1);
   const economicCycle = useGameStore((s) => s?.economicCycle);
   const activeAuctions = useGameStore((s) => s?.activeAuctions ?? []);
   const buyProperty = useGameStore((s) => s?.buyProperty);
   const sellProperty = useGameStore((s) => s?.sellProperty);
   const togglePropertyRental = useGameStore((s) => s?.togglePropertyRental);
   const renovatePropertyAction = useGameStore((s) => s?.renovatePropertyAction);
-  const placePropertyAuctionBid = useGameStore((s) => s?.placePropertyAuctionBid);
-  const inspectPropertyAuction = useGameStore((s) => s?.inspectPropertyAuction);
-  const leavePropertyAuction = useGameStore((s) => s?.leavePropertyAuction);
   const [tab, setTab] = useState<'owned' | 'listings' | 'auctions'>(properties.length > 0 ? 'owned' : 'listings');
-  const [expandedAuctionId, setExpandedAuctionId] = useState<string | null>(null);
-  const globalWeek = ((year - 1) * 20) + week;
   const cyclePhase = economicCycle?.phase ?? 'expansion';
   const cycleEffects = getEconomicCycleEffects(cyclePhase);
   const propertyPurchaseMultiplier = getPropertyCyclePurchaseMultiplier(cyclePhase);
@@ -84,10 +76,7 @@ export default function PropertiesScreen() {
             { key: 'auctions', label: `Auctions (${activeAuctions.length})`, icon: 'hammer-outline' },
           ]}
           activeKey={tab}
-          onChange={(next) => {
-            setTab(next);
-            if (next !== 'auctions') setExpandedAuctionId(null);
-          }}
+          onChange={(next) => setTab(next)}
           accentColor={Colors.business}
         />
 
@@ -283,28 +272,16 @@ export default function PropertiesScreen() {
 
         {tab === 'auctions' && <>
           <View style={styles.sectionHeading}>
-            <Text style={styles.sectionTitle}>Live Auctions</Text>
-            <Text style={styles.sectionSub}>Inspect selectively and bid only when the spread makes sense.</Text>
+            <Text style={styles.sectionTitle}>Live Property Auctions</Text>
+            <Text style={styles.sectionSub}>Four quick rounds, real bidders, instant results. No weekly deadlines.</Text>
+            <Text style={styles.investmentMeta}>
+              Inspect a listing, then enter its bidding room. Unsold or skipped lots refresh when you advance a week.
+            </Text>
           </View>
-          <Text style={styles.investmentMeta}>
-            Cash committed to leading offers: {formatCurrency(getReservedAuctionBidTotal(activeAuctions))}.
-            Weekly expenses can still affect final settlement.
-          </Text>
           {activeAuctions.map((auction) => {
-            const expanded = expandedAuctionId === auction.id;
-            const remaining = Math.max(0, auction.auctionEndWeek - globalWeek);
-            const minimumBid = auction.currentBid + auction.minimumBidIncrease;
-            const strongBid = minimumBid + auction.minimumBidIncrease * 2;
-            const aggressiveBid = minimumBid + auction.minimumBidIncrease * 6;
-            const inspectCost = getInspectionCost(auction);
-            const rivals = auction.aiBidders.filter((bidder) => bidder.active);
-            const availableToBid = Math.max(0, cash - getReservedAuctionBidTotal(activeAuctions, auction.id));
-            const freeCash = Math.max(0, cash - getReservedAuctionBidTotal(activeAuctions));
-            const canBid = !auction.playerIsHighestBidder && availableToBid >= minimumBid;
-            const comparisonBid = auction.playerIsHighestBidder ? auction.currentBid : minimumBid;
-            const cautiousSpread = auction.estimatedValueMin - comparisonBid;
-            const bid = (amount: number) => confirmAction('Place Auction Bid', `Bid ${formatCurrency(amount)} on ${auction.propertyName}? Rivals may counter immediately. You will need cash available when the auction closes.`, () => placePropertyAuctionBid?.(auction.id, amount));
-
+            const activeRivals = auction.aiBidders.filter((bidder) => bidder.active).length;
+            const sessionActive = auction.liveRound !== undefined;
+            const otherSessionActive = activeAuctions.some((item) => item.id !== auction.id && item.liveRound !== undefined);
             return (
               <GameCard key={auction.id} compact style={styles.propCard}>
                 <View style={styles.itemIntro}>
@@ -316,133 +293,37 @@ export default function PropertiesScreen() {
                     </View>
                     <Text style={styles.propDesc} numberOfLines={1}>{auction.location} • {auction.auctionType}</Text>
                     <View style={styles.statusRow}>
-                      <StatusPill compact icon="time-outline" label={`${remaining}w left`} color={Colors.warning} />
-                      <StatusPill
-                        compact
-                        icon={auction.playerIsHighestBidder ? 'checkmark-circle-outline' : auction.playerHighestBid > 0 ? 'alert-circle-outline' : 'people-outline'}
-                        label={auction.playerIsHighestBidder ? 'Highest bidder' : auction.playerHighestBid > 0 ? 'Outbid' : `${rivals.length} active rivals`}
-                        color={auction.playerIsHighestBidder ? Colors.primary : auction.playerHighestBid > 0 ? Colors.negative : Colors.textSecondary}
-                      />
+                      <StatusPill compact icon={sessionActive ? 'play-circle-outline' : 'people-outline'}
+                        label={sessionActive ? `Round ${(auction.liveRound ?? 0) + 1} of ${auction.liveMaxRounds ?? 4}` : `${activeRivals} rivals`}
+                        color={sessionActive ? Colors.business : Colors.textSecondary} />
+                      {auction.inspectionPurchased && <StatusPill compact icon="search-outline" label="Inspected" color={Colors.info} />}
                     </View>
                   </View>
                 </View>
-
                 <View style={styles.auctionMetricRow}>
                   <View style={styles.auctionMetricPrimary}>
-                    <Text style={styles.miniLabel}>Current bid</Text>
+                    <Text style={styles.miniLabel}>Opening bid</Text>
                     <Text style={styles.bidValue}>{formatCurrency(auction.currentBid)}</Text>
                   </View>
                   <View style={styles.auctionMetricSecondary}>
-                    <Text style={styles.miniLabel}>Estimated value</Text>
+                    <Text style={styles.miniLabel}>Estimated market value</Text>
                     <Text style={styles.miniValue} numberOfLines={1}>{formatCurrency(auction.estimatedValueMin)} – {formatCurrency(auction.estimatedValueMax)}</Text>
                   </View>
                 </View>
-
-                <View style={styles.actionGrid}>
-                  <GameButton
-                    compact
-                    variant="secondary"
-                    accentColor={Colors.info}
-                    icon={expanded ? 'chevron-up-outline' : 'information-circle-outline'}
-                    label={expanded ? 'Hide Details' : 'View Details'}
-                    onPress={() => setExpandedAuctionId(expanded ? null : auction.id)}
-                    style={styles.cardAction}
-                  />
-                  <GameButton
-                    compact
-                    accentColor={Colors.business}
-                    icon="hammer-outline"
-                    label={auction.playerIsHighestBidder ? 'You are leading' : canBid ? `Bid ${formatCurrency(minimumBid)}` : 'Need cash'}
-                    onPress={() => bid(minimumBid)}
-                    disabled={!canBid}
-                    style={styles.cardAction}
-                  />
-                </View>
-
-                {expanded && (
-                  <View style={styles.detailsBox}>
-                    <View style={styles.auctionInsight}>
-                      <Text style={styles.insightTitle}>
-                        {cautiousSpread >= 0
-                          ? `${formatCurrency(cautiousSpread)} below the low value estimate`
-                          : `${formatCurrency(Math.abs(cautiousSpread))} above the low value estimate`}
-                      </Text>
-                      <Text style={styles.insightNote}>
-                        Value estimates are uncertain. Your bid is not the full cost of ownership.
-                      </Text>
-                      <Text style={styles.insightNote}>
-                        {rivals.length > 0
-                          ? `${rivals.length} rival(s) can still raise: ${rivals.slice(0, 3).map((rival) => `${rival.name} (${rival.personality})`).join(', ')}${rivals.length > 3 ? '…' : ''}`
-                          : 'No rivals currently have room for another minimum raise.'}
-                      </Text>
-                      {auction.playerHighestBid > 0 && (
-                        <Text style={styles.insightNote}>
-                          {auction.playerIsHighestBidder ? 'Your offer is leading. You can wait or withdraw.' : 'You were outbid. Raise again or leave it.'}
-                        </Text>
-                      )}
-                    </View>
-                    <View style={styles.detailGrid}>
-                      <View style={styles.detailCell}><Text style={styles.miniLabel}>Rent / month</Text><Text style={styles.detailValue}>{formatCurrency(auction.expectedWeeklyRent * 4)}</Text></View>
-                      <View style={styles.detailCell}><Text style={styles.miniLabel}>Condition</Text><Text style={styles.detailValue}>{auction.conditionKnown ? `${auction.conditionScore}/100` : 'Unknown'}</Text></View>
-                      <View style={styles.detailCell}><Text style={styles.miniLabel}>Tenant</Text><Text style={styles.detailValue} numberOfLines={1}>{auction.tenantStatusKnown ? auction.tenantStatus : 'Unknown'}</Text></View>
-                      <View style={styles.detailCell}><Text style={styles.miniLabel}>Renovation</Text><Text style={styles.detailValue} numberOfLines={1}>{auction.inspectionPurchased ? `${formatCurrency(auction.estimatedRenovationCostMin)} – ${formatCurrency(auction.estimatedRenovationCostMax)}` : 'Unknown'}</Text></View>
-                    </View>
-
-                    {auction.inspectionPurchased && (
-                      <Text style={styles.investmentMeta}>
-                        Estimated bid + repairs: {formatCurrency(comparisonBid + auction.estimatedRenovationCostMin)} – {formatCurrency(comparisonBid + auction.estimatedRenovationCostMax)}.
-                        Further defects or fees may increase the actual cost.
-                      </Text>
-                    )}
-
-                    {auction.hiddenIssueKnown && auction.hiddenIssue && (
-                      <View style={styles.issueStrip}>
-                        <Ionicons name="warning-outline" size={14} color={Colors.negative} />
-                        <Text style={styles.issueStripText}>{auction.hiddenIssue}</Text>
-                      </View>
-                    )}
-
-                    {!auction.inspectionPurchased && (
-                      <GameButton
-                        compact
-                        variant="secondary"
-                        accentColor={Colors.info}
-                        icon="search-outline"
-                        label={freeCash >= inspectCost ? `Inspect • ${formatCurrency(inspectCost)}` : `Need ${formatCurrency(inspectCost)}`}
-                        onPress={() => confirmAction('Property Inspection', `Spend ${formatCurrency(inspectCost)} to reveal condition, tenant status and a narrower estimate?`, () => inspectPropertyAuction?.(auction.id))}
-                        disabled={freeCash < inspectCost}
-                      />
-                    )}
-
-                    <View style={styles.bidOptions}>
-                      <GameButton
-                        compact
-                        variant="secondary"
-                        accentColor={Colors.business}
-                        label={`Strong • ${formatCurrency(strongBid)}`}
-                        onPress={() => bid(strongBid)}
-                        disabled={auction.playerIsHighestBidder || availableToBid < strongBid}
-                        style={styles.cardAction}
-                      />
-                      <GameButton
-                        compact
-                        variant="secondary"
-                        accentColor={Colors.warning}
-                        label={`Aggressive • ${formatCurrency(aggressiveBid)}`}
-                        onPress={() => bid(aggressiveBid)}
-                        disabled={auction.playerIsHighestBidder || availableToBid < aggressiveBid}
-                        style={styles.cardAction}
-                      />
-                    </View>
-
-                    {auction.playerHighestBid > 0 && (
-                      <GameButton compact variant="ghost" label={auction.playerIsHighestBidder ? 'Withdraw offer' : 'Clear bid / leave'} icon="exit-outline" onPress={() => leavePropertyAuction?.(auction.id)} />
-                    )}
-                  </View>
-                )}
+                <GameButton
+                  compact
+                  accentColor={Colors.business}
+                  icon={sessionActive ? 'play-outline' : 'hammer-outline'}
+                  label={sessionActive ? 'Resume Live Auction' : otherSessionActive ? 'Finish Your Other Auction' : 'Enter Auction'}
+                  onPress={() => router.push({ pathname: '/property-auction', params: { auctionId: auction.id } })}
+                  disabled={otherSessionActive}
+                />
               </GameCard>
             );
           })}
+          {activeAuctions.length === 0 && (
+            <Text style={styles.emptyOwnedText}>All current auction lots are settled. Advance one game week to get fresh opportunities.</Text>
+          )}
         </>}
       </ScrollView>
     </SafeAreaView>
