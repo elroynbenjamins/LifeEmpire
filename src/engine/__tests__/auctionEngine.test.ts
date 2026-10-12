@@ -60,7 +60,7 @@ describe('real-estate auctions', () => {
       ],
     };
     const random = jest.spyOn(Math, 'random').mockReturnValue(0);
-    let updated: typeof auction;
+    let updated: typeof base;
     try {
       updated = placeAuctionBid(auction, amount);
     } finally {
