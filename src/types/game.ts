@@ -149,12 +149,18 @@ export interface EstateSettlement {
 }
 
 export type SuccessionAssetStrategy = 'liquidate' | 'keep_stocks' | 'keep_properties' | 'keep_both';
+export type SuccessionTaxFinancing = boolean | 'full';
+export type SuccessionHandoverPlan = 'keep' | 'preserve' | 'modernize' | 'cash_flow';
 
 export interface SuccessionPreview {
   childId: string;
   childName: string;
   childAge: number;
   existingSavings: number;
+  existingDebt: number;
+  existingVentureValue: number;
+  guardianshipWeeks: number;
+  preparedSuccessor: boolean;
   existingBusinessStakeValue: number;
   assetStrategy: SuccessionAssetStrategy;
   inheritedCash: number;
