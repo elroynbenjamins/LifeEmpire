@@ -2609,6 +2609,17 @@ const useGameStore = create<GameStore>((set, get) => ({
       weeklyPayment: Math.ceil(preview.businessSettlementDebt / 80),
       weeksRemaining: 80,
     } : null;
+    // Co-heirs retain a claim on the full estate even when its main value is
+    // illiquid company equity. Repay their share across ten in-game years,
+    // interest free, instead of forcing an immediate company sale.
+    const familyBuyoutLoan: ActiveLoan | null = preview.familySettlementDebt > 0 ? {
+      loanId: `family_settlement_g${nextGeneration}`,
+      name: 'Family Inheritance Settlement',
+      originalAmount: preview.familySettlementDebt,
+      remainingAmount: preview.familySettlementDebt,
+      weeklyPayment: Math.ceil(preview.familySettlementDebt / 200),
+      weeksRemaining: 200,
+    } : null;
     const inheritedPersonalDebt: ActiveLoan | null = preview.existingDebt > 0 ? {
       loanId: `preexisting_child_debt_g${nextGeneration}`,
       name: 'Existing Personal Debt',
@@ -2876,7 +2887,7 @@ const useGameStore = create<GameStore>((set, get) => ({
       totalWeeksWorked: 0,
       stocks: state.stocks ?? [],
       holdings: inheritedHoldings,
-      loans: [inheritanceLoan, estateSettlementLoan, inheritedPersonalDebt].filter((loan): loan is ActiveLoan => loan !== null),
+      loans: [inheritanceLoan, estateSettlementLoan, familyBuyoutLoan, inheritedPersonalDebt].filter((loan): loan is ActiveLoan => loan !== null),
       bankDeposits: [],
       happiness: 45,
       netWorthHistory: [],
@@ -2943,9 +2954,11 @@ const useGameStore = create<GameStore>((set, get) => ({
       showRelationshipEventModal: false,
       relationshipFeedback: {
         title: `Generation ${nextGeneration}`,
-        message: inheritanceLoanPrincipal > 0
-          ? `${child.name} inherited the companies intact and financed ${formatCurrencySafe(inheritanceLoanPrincipal)} in tax over 80 weeks${guardianYears > 0 ? ` following ${guardianYears} years of guardianship` : ''}.${preview.ventureConvertsToCash ? ' Their independent venture was converted into cash because all business slots are occupied.' : ''}`
-          : `${child.name} inherited the companies intact and paid ${formatCurrencySafe(preview.inheritanceTax)} inheritance tax in cash.${preview.ventureConvertsToCash ? ' Their independent venture was converted into cash because all business slots are occupied.' : ''}`,
+        message: (inheritanceLoanPrincipal > 0
+          ? `${child.name} inherited the companies intact and financed ${formatCurrencySafe(inheritanceLoanPrincipal)} in tax over 80 weeks${guardianYears > 0 ? ` following ${guardianYears} years of guardianship` : ''}.`
+          : `${child.name} inherited the companies intact and paid ${formatCurrencySafe(preview.inheritanceTax)} inheritance tax in cash.`)
+          + (preview.familySettlementDebt > 0 ? ` A ${formatCurrencySafe(preview.familySettlementDebt)} interest-free family inheritance settlement is due over 200 weeks.` : '')
+          + (preview.ventureConvertsToCash ? ' Their independent venture was converted into cash because all business slots are occupied.' : ''),
         positive: true,
       },
       periodIncome: 0,
@@ -2956,7 +2969,7 @@ const useGameStore = create<GameStore>((set, get) => ({
       periodJobChanges: 0,
       periodCoursesCompleted: 0,
       periodStocksPurchased: 0,
-      periodLoansTaken: Number(!!inheritanceLoan) + Number(!!estateSettlementLoan) + Number(!!inheritedPersonalDebt),
+      periodLoansTaken: Number(!!inheritanceLoan) + Number(!!estateSettlementLoan) + Number(!!familyBuyoutLoan) + Number(!!inheritedPersonalDebt),
       periodLoansRepaid: 0,
       periodAchievements: 0,
       periodStartWeek: ((takeoverYear - 1) * 20) + state.week,
