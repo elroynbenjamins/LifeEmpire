@@ -60,7 +60,8 @@ export function generateAuction(globalWeek: number, inflationMultiplier: number,
     startingBid, currentBid: startingBid, minimumBidIncrease: round500(Math.max(1000, marketValue * 0.025)), expectedWeeklyRent: Math.round(property.weeklyRentalIncome * inflationMultiplier * conditionScore / 100),
     conditionScore, conditionKnown: false, estimatedRenovationCostMin: round500(renovation * 0.7), estimatedRenovationCostMax: round500(renovation * 1.35), actualRenovationCost: renovation,
     inspectionPurchased: false, inspectionCostPaid: 0, tenantStatus: property.type === 'land' ? 'Not applicable' : Math.random() < 0.12 ? 'Tenant refusing to leave' : Math.random() < 0.28 ? 'Problem tenant' : Math.random() < 0.62 ? 'Occupied' : 'Vacant', tenantStatusKnown: property.type === 'land',
-    auctionEndWeek: 0, // legacy persisted field; live auctions have no weekly deadline aiBidders: createBidders(marketValue, auctionType), playerHighestBid: 0, playerIsHighestBidder: false, hiddenIssue, hiddenIssueKnown: false, rareOpportunity,
+    auctionEndWeek: 0, // legacy persisted field; live auctions have no weekly deadline
+    aiBidders: createBidders(marketValue, auctionType), playerHighestBid: 0, playerIsHighestBidder: false, hiddenIssue, hiddenIssueKnown: false, rareOpportunity,
   };
 }
 
