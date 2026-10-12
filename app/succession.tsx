@@ -10,7 +10,9 @@ import useGameStore from '../src/store/gameStore';
 import { formatCurrency } from '../src/utils/format';
 import { getSuccessionPreview } from '../src/engine/lifecycleEngine';
 import { getPrestigeEffects } from '../src/engine/prestigeEngine';
-import { SuccessionAssetStrategy } from '../src/types/game';
+import { SuccessionAssetStrategy, SuccessionHandoverPlan, SuccessionTaxFinancing } from '../src/types/game';
+import { getPlayerOwnershipPct } from '../src/engine/businessEngine';
+import { getBusinessDebtPrincipal } from '../src/engine/businessDebtEngine';
 
 const STEP_TITLES = ['Estate', 'Choose Heir', 'Tax & Assets'];
 
@@ -27,10 +29,13 @@ export default function SuccessionScreen() {
 
   const [step, setStep] = useState(0);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
-  const [assetStrategy, setAssetStrategy] = useState<SuccessionAssetStrategy>('liquidate');
+  const [assetStrategy, setAssetStrategy] = useState<SuccessionAssetStrategy>('keep_both');
+  const [handoverPlan, setHandoverPlan] = useState<SuccessionHandoverPlan>('keep');
+  const inheritedCompanies = (state.businesses ?? []).filter((company) => getPlayerOwnershipPct(company) > 0);
+  const independentHoldingsCash = (state.holdingCompanies ?? []).reduce((sum, holding) => sum + Math.max(0, holding.cashReserve ?? 0), 0);
 
   const eligible = useMemo(() => children
-    .map((child) => ({ child, preview: getSuccessionPreview(state, child.id, 'liquidate', inheritanceTaxReduction) }))
+    .map((child) => ({ child, preview: getSuccessionPreview(state, child.id, 'keep_both', inheritanceTaxReduction) }))
     .filter((item) => !!item.preview), [state, inheritanceTaxReduction]);
   const hasWillingHeir = eligible.some(({ preview }) => preview?.willingToSucceed);
 
@@ -39,9 +44,9 @@ export default function SuccessionScreen() {
     ? getSuccessionPreview(state, selectedChildId, assetStrategy, inheritanceTaxReduction)
     : null;
 
-  const finishSuccession = (financeTaxWithLoan: boolean) => {
+  const finishSuccession = (financeTaxWithLoan: SuccessionTaxFinancing) => {
     if (!selectedChildId || !preview?.willingToSucceed) return;
-    continueAsChild(selectedChildId, financeTaxWithLoan, assetStrategy);
+    continueAsChild(selectedChildId, financeTaxWithLoan, assetStrategy, handoverPlan);
     router.replace('/tabs');
   };
 
@@ -121,6 +126,7 @@ export default function SuccessionScreen() {
                       {estate.businessValue > 0 ? ` ${formatCurrency(estate.businessValue)} of business equity is reserved for the next generation.` : ''}
                       {estate.successorName ? ` ${estate.successorName} was your planned successor, but you can still choose another eligible child now.` : ''}
                     </Text>
+                    <Text style={styles.meta}>{inheritedCompanies.length} player-owned companies • {formatCurrency(independentHoldingsCash)} in holding reserves</Text>
                   </View>
                 )}
               </GameCard>
@@ -135,14 +141,14 @@ export default function SuccessionScreen() {
         {step === 1 && (
           <>
             <Text style={styles.title}>2. Choose the Next Generation</Text>
-            <Text style={styles.intro}>Pick an adult child based on the life they built, their relationship with you, and their ability to carry the empire forward.</Text>
+            <Text style={styles.intro}>Choose a child to continue the dynasty. If the heir is under 18, a guardian will hold the companies intact until adulthood.</Text>
 
             {eligible.length === 0 ? (
               <GameCard>
                 <View style={styles.noHeir}>
                   <Ionicons name="people-outline" size={38} color={Colors.textMuted} />
-                  <Text style={styles.noHeirTitle}>No Adult Heir</Text>
-                  <Text style={styles.noHeirText}>There is no child aged 18+ who can continue this dynasty.</Text>
+                  <Text style={styles.noHeirTitle}>No Children Available</Text>
+                  <Text style={styles.noHeirText}>There is no child to continue this dynasty.</Text>
                 </View>
               </GameCard>
             ) : eligible.map(({ child, preview: heir }) => {
@@ -159,7 +165,7 @@ export default function SuccessionScreen() {
                     <View style={styles.avatar}><Ionicons name="person" size={21} color={Colors.info} /></View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.heirName}>{child.name}, {heir.childAge}</Text>
-                      <Text style={styles.meta}>{child.occupationTitle ?? 'Independent'}</Text>
+                      <Text style={styles.meta}>{heir.guardianshipWeeks > 0 ? `Guardian until 18 • ${heir.guardianshipWeeks / 20} years` : child.occupationTitle ?? 'Independent'}{heir.preparedSuccessor ? ' • Planned successor' : ''}</Text>
                     </View>
                     <View style={styles.potential}>
                       <Text style={styles.potentialScore}>{heir.futurePotentialScore}</Text>
@@ -170,6 +176,8 @@ export default function SuccessionScreen() {
                   <View style={styles.grid}>
                     <Mini label="Parent bond" value={`${heir.parentRelationship}%`} />
                     <Mini label="Savings" value={formatCurrency(heir.existingSavings)} />
+                    {heir.existingDebt > 0 && <Mini label="Personal debt" value={formatCurrency(heir.existingDebt)} />}
+                    {heir.existingVentureValue > 0 && <Mini label="Own venture" value={formatCurrency(heir.existingVentureValue)} />}
                     <Mini label="Company equity" value={heir.existingBusinessStakeValue > 0 ? formatCurrency(heir.existingBusinessStakeValue) : 'None'} />
                     <Mini label="Housing" value={child.homeStatus === 'homeowner' ? 'Owner' : 'Renting'} />
                     <Mini label="Family" value={child.partnerName ? `${child.descendants?.length ?? child.childrenCount ?? 0} child` : 'Single'} />
@@ -184,7 +192,7 @@ export default function SuccessionScreen() {
                     </View>
                   )}
 
-                  {!heir.willingToSucceed && <Text style={styles.unwilling}>Relationship too damaged: this child refuses succession.</Text>}
+                  {!heir.willingToSucceed && <Text style={styles.unwilling}>Relationship too damaged: this adult child refuses succession.</Text>}
                 </Pressable>
               );
             })}
@@ -205,7 +213,7 @@ export default function SuccessionScreen() {
         {step === 2 && selectedChild && preview && (
           <>
             <Text style={styles.title}>3. Settle Tax & Assets</Text>
-            <Text style={styles.intro}>Your companies transfer intact automatically. Choose whether stocks and property should also be preserved; keeping more illiquid assets can require inheritance-tax financing.</Text>
+            <Text style={styles.intro}>Companies transfer intact. Stocks and property are preserved by default, but keeping illiquid assets can require tax financing.</Text>
 
             <GameCard title={`${selectedChild.name}’s Inheritance`}>
               <View style={styles.strategyGrid}>
@@ -224,11 +232,26 @@ export default function SuccessionScreen() {
 
               <Text style={styles.subheading}>Result</Text>
               <MoneyRow label="Existing savings" value={preview.existingSavings} />
+              {preview.existingDebt > 0 && <MoneyRow label="Existing personal debt" value={-preview.existingDebt} negative />}
+              {preview.existingVentureValue > 0 && <MoneyRow label="Independent venture retained" value={preview.existingVentureValue} />}
+              {preview.guardianshipWeeks > 0 && <Text style={styles.meta}>A guardian preserves inherited assets for {preview.guardianshipWeeks / 20} game years until {selectedChild.name} turns 18. Company operations are held stable during this transition.</Text>}
               {preview.existingBusinessStakeValue > 0 && <MoneyRow label="Company equity already owned" value={preview.existingBusinessStakeValue} />}
               <MoneyRow label="Cash inherited" value={preview.inheritedCash} />
               {preview.inheritedStockValue > 0 && <MoneyRow label="Stocks retained" value={preview.inheritedStockValue} />}
               {preview.inheritedPropertyValue > 0 && <MoneyRow label="Property retained" value={preview.inheritedPropertyValue} />}
               {preview.inheritsBusinesses && <MoneyRow label="Companies transferred intact" value={preview.inheritedBusinessValue} />}
+              {inheritedCompanies.length > 0 && (
+                <>
+                  <Text style={styles.subheading}>Transferred companies ({inheritedCompanies.length})</Text>
+                  {inheritedCompanies.map((company) => (
+                    <View key={company.id} style={styles.row}>
+                      <Text style={styles.rowLabel} numberOfLines={1}>{company.name} • {getPlayerOwnershipPct(company).toFixed(1)}%</Text>
+                      <Text style={styles.money}>{formatCurrency(Math.max(0, company.valuation - getBusinessDebtPrincipal(company)) * getPlayerOwnershipPct(company) / 100)}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+              {independentHoldingsCash > 0 && <MoneyRow label="Holding company cash retained" value={independentHoldingsCash} />}
               <View style={styles.divider} />
               <MoneyRow label="Inheritance tax" value={-preview.inheritanceTax} negative strong />
               {preview.businessSettlementDebt > 0 && (
@@ -236,6 +259,7 @@ export default function SuccessionScreen() {
               )}
               {preview.loanNeeded > 0 && <MoneyRow label="Minimum financing need" value={preview.loanNeeded} />}
 
+              {preview.preparedSuccessor && preview.inheritsBusinesses && <Text style={styles.meta}>Prepared successor: minor 20-week employee-morale stability bonus.</Text>}
               <View style={styles.taxNote}>
                 <Text style={styles.taxNoteText}>
                   Tax is based on inherited value, not on whether assets are sold. Existing personal savings can be used to pay it.
@@ -243,6 +267,25 @@ export default function SuccessionScreen() {
                 </Text>
               </View>
             </GameCard>
+
+            {preview.inheritsBusinesses && (
+              <GameCard title="Optional Business Handover">
+                <Text style={styles.meta}>One choice for the first 20 weeks of the new generation; keeping the existing strategy adds no modifiers.</Text>
+                <View style={styles.strategyGrid}>
+                  {([
+                    ['keep', 'Keep Strategy', 'Continue unchanged.'],
+                    ['preserve', 'Preserve Legacy', 'Slightly steadier morale and reputation.'],
+                    ['modernize', 'Modernize', 'Better growth, slightly higher expenses.'],
+                    ['cash_flow', 'Cash Flow', 'Lower expenses, slightly lower revenue.'],
+                  ] as Array<[SuccessionHandoverPlan, string, string]>).map(([key, label, desc]) => (
+                    <Pressable key={key} style={[styles.strategy, handoverPlan === key && styles.strategyActive]} onPress={() => setHandoverPlan(key)}>
+                      <Text style={[styles.strategyTitle, handoverPlan === key && styles.strategyTitleActive]}>{label}</Text>
+                      <Text style={styles.strategyDesc}>{desc}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </GameCard>
+            )}
 
             <View style={styles.navRow}>
               <Pressable style={styles.secondary} onPress={() => setStep(1)}><Text style={styles.secondaryText}>← Heir</Text></Pressable>
@@ -252,11 +295,17 @@ export default function SuccessionScreen() {
                     <Text style={styles.primaryText}>Pay Tax in Cash & Continue</Text>
                   </Pressable>
                 )}
-                {preview.inheritanceTax > 0 && (
-                  <Pressable style={styles.loanButton} onPress={() => finishSuccession(true)}>
-                    <Text style={styles.loanText}>Finance Tax over 80 Weeks</Text>
+                {preview.loanNeeded > 0 && (
+                  <Pressable style={styles.primaryFlex} onPress={() => finishSuccession(true)}>
+                    <Text style={styles.primaryText}>Pay Cash + Finance {formatCurrency(preview.loanNeeded)}</Text>
                   </Pressable>
                 )}
+                {preview.inheritanceTax > 0 && (
+                  <Pressable style={styles.loanButton} onPress={() => finishSuccession('full')}>
+                    <Text style={styles.loanText}>Finance Full Tax • {formatCurrency(preview.inheritanceTax)}</Text>
+                  </Pressable>
+                )}
+                {preview.inheritanceTax > 0 && <Text style={styles.meta}>Tax loans have a 6% total financing charge over 80 weeks. Partial financing minimizes interest.</Text>}
                 {preview.inheritanceTax <= 0 && (
                   <Pressable style={styles.primaryFlex} onPress={() => finishSuccession(false)}>
                     <Text style={styles.primaryText}>Continue as {selectedChild.name}</Text>
