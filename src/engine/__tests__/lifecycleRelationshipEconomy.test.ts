@@ -562,6 +562,75 @@ describe('expanded relationship progression', () => {
     expect(preview?.loanNeeded).toBeGreaterThan(0);
   });
 
+  it('reserves ordinary companies for the child chosen at succession without requiring a family-business designation', () => {
+    const child = {
+      id: 'ordinary-company-heir',
+      name: 'Finn',
+      gender: 'boy' as const,
+      birthGlobalWeek: 1,
+      age: 30,
+      educationFund: 0,
+      status: 'independent' as const,
+      occupationTitle: 'Assistant Accountant',
+      weeklyIncome: 1000,
+      savings: 25000,
+      homeStatus: 'renting' as const,
+      partnerName: null,
+      partnerGender: null,
+      childrenCount: 0,
+    };
+    const ordinaryCompany = {
+      id: 'ordinary-company',
+      typeId: 'coffee_shop',
+      name: 'Built From Scratch BV',
+      valuation: 300000,
+      businessLoans: [],
+      holdingCompanyId: null,
+      familyBusiness: null,
+      ownership: [{
+        ownerType: 'player' as const,
+        ownerId: 'player:g1',
+        ownerName: 'Founder',
+        percent: 100,
+        votingPercent: 100,
+      }],
+    } as any;
+    const state = {
+      ...INITIAL_GAME_STATE,
+      playerName: 'Founder',
+      cash: 100000,
+      year: 31,
+      week: 1,
+      businesses: [ordinaryCompany],
+      relationshipModeEnabled: true,
+      relationshipState: {
+        ...INITIAL_RELATIONSHIP_STATE,
+        children: [child],
+        estatePlan: {
+          ...INITIAL_RELATIONSHIP_STATE.estatePlan,
+          successorId: null,
+        },
+      },
+    };
+
+    const estate = calculateEstateSettlement(state);
+    expect(estate.successorId).toBeNull();
+    expect(estate.businessValue).toBe(300000);
+    expect(estate.beneficiaries[0].amount).toBe(estate.netEstate - estate.businessValue);
+
+    const preview = getSuccessionPreview({
+      ...state,
+      relationshipState: {
+        ...state.relationshipState,
+        estateSettlement: estate,
+      },
+    }, child.id);
+
+    expect(preview?.inheritsBusinesses).toBe(true);
+    expect(preview?.inheritedBusinessValue).toBe(300000);
+    expect(preview?.businessSettlementDebt).toBe(0);
+  });
+
   it('lets independent adult children progress into homes, partners, businesses and children', () => {
     const random = jest.spyOn(Math, 'random');
     random
