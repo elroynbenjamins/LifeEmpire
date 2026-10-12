@@ -6,6 +6,7 @@ import {
   getWeeklyUtilityCost,
   getWeeklyFoodCost,
   getWeeklySalary,
+  getWeeklyLoanPayments,
   processLoans,
   processTaxes,
 } from '../financeEngine';
@@ -108,6 +109,16 @@ describe('financeEngine', () => {
     }));
 
     expect(result).toBe(5_400);
+  });
+
+  test('never overcharges a final rounded loan installment', () => {
+    const loans = [{
+      loanId: 'rounding', name: 'Inheritance Tax Loan',
+      originalAmount: 101, remainingAmount: 1,
+      weeklyPayment: 2, weeksRemaining: 1,
+    }];
+    expect(getWeeklyLoanPayments(state({ loans }))).toBe(1);
+    expect(processLoans(state({ loans }))).toEqual({ loans: [], totalPaid: 1, loansRepaid: 1 });
   });
 
   test('removes a loan after its final payment', () => {
