@@ -162,6 +162,10 @@ export interface SuccessionPreview {
   inheritedPropertyValue: number;
   inheritedPropertyIds: string[];
   inheritedBusinessValue: number;
+  /** True when the deceased player's company stakes transfer intact to this playable heir. */
+  inheritsBusinesses: boolean;
+  /** Estate/admin costs that could not be covered without liquidating inherited companies. */
+  businessSettlementDebt: number;
   inheritanceTaxBase: number;
   inheritanceTax: number;
   taxCashAvailable: number;
