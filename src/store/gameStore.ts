@@ -2445,6 +2445,7 @@ const useGameStore = create<GameStore>((set, get) => ({
       childId,
       assetStrategy,
       getPrestigeEffects(state.profile).inheritance_tax_reduction ?? 0,
+      getBusinessCapacity(state.profile),
     );
     if (!child || !preview || !preview.willingToSucceed) return;
     if (!financeTaxWithLoan && preview.taxCashAvailable < preview.inheritanceTax) return;
@@ -2650,12 +2651,13 @@ const useGameStore = create<GameStore>((set, get) => ({
     const inheritedProperties = (state.properties ?? []).filter((property) =>
       (preview.inheritedPropertyIds ?? []).includes(property.id)
     );
-    const liquidStartingCash = preview.existingSavings + preview.inheritedCash + stockRoundingCash;
+    const liquidStartingCash = preview.existingSavings + preview.inheritedCash + stockRoundingCash
+      + (preview.ventureConvertsToCash ? preview.existingVentureValue : 0);
     const cashAfterTax = Math.max(0, liquidStartingCash - taxPaidFromCash);
     // Independent adult children may have a simulated venture that did not yet
     // live in the parent's company list. Materialize it instead of dropping its
     // accumulated equity when it becomes the player character.
-    const childVentureBase = preview.existingVentureValue > 0
+    const childVentureBase = preview.existingVentureValue > 0 && !preview.ventureConvertsToCash
       ? createBusiness('digital_agency', `${child.name}'s Independent Venture`, state.week, takeoverYear, state.inflationMultiplier)
       : null;
     // The venture equity was accumulated off-screen. Seed an earnings record
@@ -2839,7 +2841,21 @@ const useGameStore = create<GameStore>((set, get) => ({
         : { ...INITIAL_RELATIONSHIP_STATE.estatePlan },
     };
 
-    const transitionedFamilyTree = transitionFamilyTreeToChild({ ...state, year: takeoverYear }, child.id, nextGeneration);
+    // Build the ancestry tree at the actual death date, not the time-skipped
+    // takeover year. Otherwise a minor heir acquires a false birth year.
+    const successionTree = transitionFamilyTreeToChild(state, child.id, nextGeneration);
+    const transitionedFamilyTree = {
+      ...successionTree,
+      people: successionTree.people.map((person) =>
+        person.id === `person:${child.id}`
+          ? {
+              ...person,
+              age: Math.max(18, preview.childAge),
+              birthYear: Math.max(1, state.year - preview.childAge),
+            }
+          : person,
+      ),
+    };
 
     const newState: GameState = {
       ...INITIAL_GAME_STATE,
@@ -2928,8 +2944,8 @@ const useGameStore = create<GameStore>((set, get) => ({
       relationshipFeedback: {
         title: `Generation ${nextGeneration}`,
         message: inheritanceLoanPrincipal > 0
-          ? `${child.name} inherited the companies intact and financed ${formatCurrencySafe(inheritanceLoanPrincipal)} in tax over 80 weeks${guardianYears > 0 ? ` following ${guardianYears} years of guardianship` : ''}.`
-          : `${child.name} inherited the companies intact and paid ${formatCurrencySafe(preview.inheritanceTax)} inheritance tax in cash.`,
+          ? `${child.name} inherited the companies intact and financed ${formatCurrencySafe(inheritanceLoanPrincipal)} in tax over 80 weeks${guardianYears > 0 ? ` following ${guardianYears} years of guardianship` : ''}.${preview.ventureConvertsToCash ? ' Their independent venture was converted into cash because all business slots are occupied.' : ''}`
+          : `${child.name} inherited the companies intact and paid ${formatCurrencySafe(preview.inheritanceTax)} inheritance tax in cash.${preview.ventureConvertsToCash ? ' Their independent venture was converted into cash because all business slots are occupied.' : ''}`,
         positive: true,
       },
       periodIncome: 0,
@@ -2943,7 +2959,7 @@ const useGameStore = create<GameStore>((set, get) => ({
       periodLoansTaken: Number(!!inheritanceLoan) + Number(!!estateSettlementLoan) + Number(!!inheritedPersonalDebt),
       periodLoansRepaid: 0,
       periodAchievements: 0,
-      periodStartWeek: ((state.year - 1) * 20) + state.week,
+      periodStartWeek: ((takeoverYear - 1) * 20) + state.week,
     });
     saveGame(newState, state.activeSlot);
   },
