@@ -250,7 +250,9 @@ export function getSuccessionPreview(
   // The playable heir always receives the deceased player's company stakes.
   // A pre-designated successor remains useful as planning context, but it is no
   // longer required to prevent ordinary companies from being liquidated.
-  const inheritsBusinesses = (state.businesses ?? []).some((business) => getPlayerOwnershipPct(business) > 0);
+  const inheritsBusinesses = estate.businessValue > 0
+    || (estate.businessSettlementDebt ?? 0) > 0
+    || (state.businesses ?? []).some((business) => getPlayerOwnershipPct(business) > 0);
   const inheritedBusinessValue = inheritsBusinesses ? Math.min(estate.businessValue, estate.netEstate) : 0;
   const businessSettlementDebt = inheritsBusinesses
     ? (estate.businessSettlementDebt ?? Math.max(0, estate.businessValue - estate.netEstate))
