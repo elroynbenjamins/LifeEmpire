@@ -13,6 +13,7 @@ import { getPrestigeEffects } from '../src/engine/prestigeEngine';
 import { SuccessionAssetStrategy, SuccessionHandoverPlan, SuccessionTaxFinancing } from '../src/types/game';
 import { getPlayerOwnershipPct } from '../src/engine/businessEngine';
 import { getBusinessDebtPrincipal } from '../src/engine/businessDebtEngine';
+import { getBusinessCapacity } from '../src/engine/businessCapacityEngine';
 
 const STEP_TITLES = ['Estate', 'Choose Heir', 'Tax & Assets'];
 
@@ -26,6 +27,7 @@ export default function SuccessionScreen() {
   const profile = useGameStore((s) => s.profile);
   const prestigeEffects = getPrestigeEffects(profile);
   const inheritanceTaxReduction = prestigeEffects.inheritance_tax_reduction ?? 0;
+  const businessCapacity = getBusinessCapacity(profile);
 
   const [step, setStep] = useState(0);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
@@ -35,13 +37,13 @@ export default function SuccessionScreen() {
   const independentHoldingsCash = (state.holdingCompanies ?? []).reduce((sum, holding) => sum + Math.max(0, holding.cashReserve ?? 0), 0);
 
   const eligible = useMemo(() => children
-    .map((child) => ({ child, preview: getSuccessionPreview(state, child.id, 'keep_both', inheritanceTaxReduction) }))
-    .filter((item) => !!item.preview), [state, inheritanceTaxReduction]);
+    .map((child) => ({ child, preview: getSuccessionPreview(state, child.id, 'keep_both', inheritanceTaxReduction, businessCapacity) }))
+    .filter((item) => !!item.preview), [state, inheritanceTaxReduction, businessCapacity]);
   const hasWillingHeir = eligible.some(({ preview }) => preview?.willingToSucceed);
 
   const selectedChild = children.find((child) => child.id === selectedChildId) ?? null;
   const preview = selectedChildId
-    ? getSuccessionPreview(state, selectedChildId, assetStrategy, inheritanceTaxReduction)
+    ? getSuccessionPreview(state, selectedChildId, assetStrategy, inheritanceTaxReduction, businessCapacity)
     : null;
 
   const finishSuccession = (financeTaxWithLoan: SuccessionTaxFinancing) => {
@@ -233,7 +235,8 @@ export default function SuccessionScreen() {
               <Text style={styles.subheading}>Result</Text>
               <MoneyRow label="Existing savings" value={preview.existingSavings} />
               {preview.existingDebt > 0 && <MoneyRow label="Existing personal debt" value={-preview.existingDebt} negative />}
-              {preview.existingVentureValue > 0 && <MoneyRow label="Independent venture retained" value={preview.existingVentureValue} />}
+              {preview.existingVentureValue > 0 && <MoneyRow label={preview.ventureConvertsToCash ? 'Venture paid out in cash' : 'Independent venture retained'} value={preview.existingVentureValue} />}
+              {preview.ventureConvertsToCash && <Text style={styles.meta}>All permanent business slots are occupied. The heir's off-screen independent venture is converted to personal cash at its existing value; inherited family companies stay intact. These proceeds are available to pay inheritance tax.</Text>}
               {preview.guardianshipWeeks > 0 && <Text style={styles.meta}>A guardian preserves inherited assets for {preview.guardianshipWeeks / 20} game years until {selectedChild.name} turns 18. Company operations are held stable during this transition.</Text>}
               {preview.existingBusinessStakeValue > 0 && <MoneyRow label="Company equity already owned" value={preview.existingBusinessStakeValue} />}
               <MoneyRow label="Cash inherited" value={preview.inheritedCash} />
