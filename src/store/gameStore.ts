@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { GameState, INITIAL_GAME_STATE, INITIAL_STATISTICS, INITIAL_PROFILE, INITIAL_CAREER_STATE, INITIAL_RELATIONSHIP_STATE, INITIAL_LIFECYCLE_STATE, WeekSummary, ActiveLoan, LifetimeStatistics, PlayerProfile, SaveSlotMeta, PeriodReport, TriggeredEvent, PendingInvestment, TempHappinessEffect, OwnedBusiness, OwnedProperty, BusinessEmployee, BusinessLoan, CareerState, BankDeposit, EducationCareerReminder, DatingPreference, RelationshipConnection, FamilyPlan, MarriageAgreement, RelationshipFinancialObligation, FamilyWorkArrangement, SharedGoalType, EstatePlanType, EstateStructureType, SuccessionAssetStrategy, BusinessStrategicFocus, BusinessGovernanceRole, BusinessExecutiveRole, BusinessBoardMandate, CorporateDepartmentId, CorporateCompensationPolicy, CorporateTrainingPolicy, BusinessReinvestmentArea, BusinessInsuranceArea, BusinessInsuranceTier, BusinessBudgetProfile, AcquisitionFundingMode, AcquisitionIntegrationStrategy, BusinessDelegationPolicy, HoldingCapitalPurpose, HoldingSharedServiceId } from '../types/game';
+import { GameState, INITIAL_GAME_STATE, INITIAL_STATISTICS, INITIAL_PROFILE, INITIAL_CAREER_STATE, INITIAL_RELATIONSHIP_STATE, INITIAL_LIFECYCLE_STATE, WeekSummary, ActiveLoan, LifetimeStatistics, PlayerProfile, SaveSlotMeta, PeriodReport, TriggeredEvent, PendingInvestment, TempHappinessEffect, OwnedBusiness, OwnedProperty, BusinessEmployee, BusinessLoan, CareerState, BankDeposit, EducationCareerReminder, DatingPreference, RelationshipConnection, FamilyPlan, MarriageAgreement, RelationshipFinancialObligation, FamilyWorkArrangement, SharedGoalType, EstatePlanType, EstateStructureType, SuccessionAssetStrategy, SuccessionTaxFinancing, SuccessionHandoverPlan, BusinessStrategicFocus, BusinessGovernanceRole, BusinessExecutiveRole, BusinessBoardMandate, CorporateDepartmentId, CorporateCompensationPolicy, CorporateTrainingPolicy, BusinessReinvestmentArea, BusinessInsuranceArea, BusinessInsuranceTier, BusinessBudgetProfile, AcquisitionFundingMode, AcquisitionIntegrationStrategy, BusinessDelegationPolicy, HoldingCapitalPurpose, HoldingSharedServiceId } from '../types/game';
 import { getLegacyMarketCompanyPool, initializeMarketCompanyPool, initializeStocks, mergeStocks } from '../engine/stockEngine';
 import { weeklyTick } from '../engine/weeklyTick';
 import { getNetWorth, getPortfolioValue, getUnrealizedProfitLoss } from '../engine/financeEngine';
@@ -219,7 +219,7 @@ interface GameStore extends GameState {
   setSharedRelationshipGoal: (type: SharedGoalType) => void;
   cancelSharedRelationshipGoal: () => void;
   setEstatePlan: (planType: EstatePlanType, structure: EstateStructureType, successorId: string | null) => void;
-  continueAsChild: (childId: string, financeTaxWithLoan: boolean, assetStrategy?: SuccessionAssetStrategy) => void;
+  continueAsChild: (childId: string, financeTaxWithLoan: SuccessionTaxFinancing, assetStrategy?: SuccessionAssetStrategy, handoverPlan?: SuccessionHandoverPlan) => void;
   dismissRelationshipEventModal: () => void;
   handleRelationshipEventChoice: (choiceIndex: number) => void;
   dismissRelationshipFeedback: () => void;
@@ -2436,7 +2436,7 @@ const useGameStore = create<GameStore>((set, get) => ({
     saveGame(extractGameState({ ...state, ...updates }), state.activeSlot);
   },
 
-  continueAsChild: (childId, financeTaxWithLoan, assetStrategy = 'liquidate') => {
+  continueAsChild: (childId, financeTaxWithLoan, assetStrategy = 'keep_both', handoverPlan = 'keep') => {
     const state = get();
     if (!state.lifecycle?.isDead) return;
     const child = (state.relationshipState?.children ?? []).find((item) => item.id === childId);
@@ -2448,6 +2448,11 @@ const useGameStore = create<GameStore>((set, get) => ({
     );
     if (!child || !preview || !preview.willingToSucceed) return;
     if (!financeTaxWithLoan && preview.taxCashAvailable < preview.inheritanceTax) return;
+    // A guardian administers the frozen estate until a minor reaches adulthood.
+    // Existing companies and reserves are never liquidated to skip those years.
+    const guardianYears = preview.guardianshipWeeks / 20;
+    const takeoverYear = state.year + guardianYears;
+    const nextGeneration = (state.generation ?? 1) + 1;
 
     const inheritedParentHoldingIds = new Set(
       (state.businesses ?? [])
@@ -2516,9 +2521,36 @@ const useGameStore = create<GameStore>((set, get) => ({
           .reduce((sum, stake) => sum + (stake.percent ?? 0), 0);
         const isDesignatedFamilyBusiness = !!business.familyBusiness?.isFamilyBusiness;
 
+        const handoverModifier = inheritsParentStake && handoverPlan !== 'keep'
+          ? {
+              id: `succession_${handoverPlan}_g${nextGeneration}`,
+              title: handoverPlan === 'preserve' ? 'Preserve the Legacy' : handoverPlan === 'modernize' ? 'Modernize Operations' : 'Focus on Cash Flow',
+              revenueMultiplier: handoverPlan === 'modernize' ? 1.025 : handoverPlan === 'cash_flow' ? 0.99 : 1,
+              expenseMultiplier: handoverPlan === 'modernize' ? 1.015 : handoverPlan === 'cash_flow' ? 0.975 : 1,
+              reputationPerWeek: handoverPlan === 'preserve' ? 0.03 : 0,
+              moralePerWeek: handoverPlan === 'preserve' ? 0.04 : 0,
+              weeksRemaining: 20,
+            }
+          : null;
+        const preparedModifier = inheritsParentStake && preview.preparedSuccessor
+          ? {
+              id: `succession_prepared_g${nextGeneration}`,
+              title: 'Prepared Family Successor',
+              revenueMultiplier: 1,
+              expenseMultiplier: 1,
+              reputationPerWeek: 0,
+              moralePerWeek: 0.025,
+              weeksRemaining: 20,
+            }
+          : null;
         return {
           ...business,
           ownership,
+          strategyModifiers: [
+            ...(business.strategyModifiers ?? []),
+            ...(handoverModifier ? [handoverModifier] : []),
+            ...(preparedModifier ? [preparedModifier] : []),
+          ],
           // Inheritance preserves every company, but the explicit Family Business
           // designation remains a separate strategic choice with its own bonuses.
           familyBusiness: isDesignatedFamilyBusiness
@@ -2536,8 +2568,8 @@ const useGameStore = create<GameStore>((set, get) => ({
             ...(inheritsParentStake
               ? [{
                   week: state.week,
-                  year: state.year,
-                  title: `👪 Passed to Generation ${(state.generation ?? 1) + 1}: ${child.name}`,
+                  year: takeoverYear,
+                  title: `👪 Passed to Generation ${nextGeneration}: ${child.name}`,
                   icon: '👪',
                   kind: 'event' as const,
                 }]
@@ -2546,13 +2578,26 @@ const useGameStore = create<GameStore>((set, get) => ({
         };
       });
 
-    const inheritanceLoanPrincipal = financeTaxWithLoan ? preview.inheritanceTax : 0;
+    // By default finance only the shortfall; the optional full-loan path keeps
+    // existing liquid cash available for immediate operations.
+    const inheritanceLoanPrincipal = financeTaxWithLoan === 'full'
+      ? preview.inheritanceTax
+      : financeTaxWithLoan ? preview.loanNeeded : 0;
+    const taxPaidFromCash = Math.max(0, preview.inheritanceTax - inheritanceLoanPrincipal);
     const estateSettlementLoan: ActiveLoan | null = preview.businessSettlementDebt > 0 ? {
       loanId: `estate_costs_g${(state.generation ?? 1) + 1}`,
       name: 'Unpaid Estate Settlement Costs',
       originalAmount: preview.businessSettlementDebt,
       remainingAmount: preview.businessSettlementDebt,
       weeklyPayment: Math.ceil(preview.businessSettlementDebt / 80),
+      weeksRemaining: 80,
+    } : null;
+    const inheritedPersonalDebt: ActiveLoan | null = preview.existingDebt > 0 ? {
+      loanId: `preexisting_child_debt_g${nextGeneration}`,
+      name: 'Existing Personal Debt',
+      originalAmount: preview.existingDebt,
+      remainingAmount: preview.existingDebt,
+      weeklyPayment: Math.ceil(preview.existingDebt / 80),
       weeksRemaining: 80,
     } : null;
     const inheritanceLoan: ActiveLoan | null = inheritanceLoanPrincipal > 0
@@ -2590,10 +2635,34 @@ const useGameStore = create<GameStore>((set, get) => ({
       (preview.inheritedPropertyIds ?? []).includes(property.id)
     );
     const liquidStartingCash = preview.existingSavings + preview.inheritedCash + stockRoundingCash;
-    const cashAfterTax = financeTaxWithLoan
-      ? liquidStartingCash
-      : Math.max(0, liquidStartingCash - preview.inheritanceTax);
-    const nextGeneration = (state.generation ?? 1) + 1;
+    const cashAfterTax = Math.max(0, liquidStartingCash - taxPaidFromCash);
+    // Independent adult children may have a simulated venture that did not yet
+    // live in the parent's company list. Materialize it instead of dropping its
+    // accumulated equity when it becomes the player character.
+    const childVentureBase = preview.existingVentureValue > 0
+      ? createBusiness('digital_agency', `${child.name}'s Independent Venture`, state.week, takeoverYear, state.inflationMultiplier)
+      : null;
+    const childVenture: OwnedBusiness | null = childVentureBase
+      ? {
+          ...childVentureBase,
+          id: `heir_venture_g${nextGeneration}_${child.id}`,
+          valuation: preview.existingVentureValue,
+          reputation: 50,
+          autoStrategicDecisions: true,
+          ownership: [{
+            ownerType: 'player' as const,
+            ownerId: `person:${child.id}`,
+            ownerName: child.name,
+            percent: 100,
+            votingPercent: 100,
+          }],
+          timeline: [{
+            week: state.week, year: takeoverYear,
+            title: `${child.name}'s independent venture joined the family portfolio`,
+            icon: '🏢', kind: 'event' as const,
+          }],
+        }
+      : null;
     const legacyEntry = {
       generation: state.generation ?? 1,
       name: state.playerName,
@@ -2619,11 +2688,12 @@ const useGameStore = create<GameStore>((set, get) => ({
       inheritedBusinesses.map((business) => business.holdingCompanyId).filter(Boolean)
     );
     const inheritedHoldingCompanies = (state.holdingCompanies ?? [])
-      .filter((holding) => inheritedHoldingIds.has(holding.id))
       .map((holding) => ({
         ...holding,
-        cashReserve: inheritedParentHoldingIds.has(holding.id) ? holding.cashReserve : 0,
-        generationsOwned: Math.max(1, holding.generationsOwned ?? 1) + (inheritedParentHoldingIds.has(holding.id) ? 1 : 0),
+        // Holdings are player-owned even without subsidiaries; their standalone
+        // reserves must not be silently discarded at succession.
+        cashReserve: holding.cashReserve,
+        generationsOwned: Math.max(1, holding.generationsOwned ?? 1) + 1,
         controllerName: child.name,
         controllerPersonId: `person:${child.id}`,
         executiveChildId: holding.executiveChildId === child.id ? null : (holding.executiveChildId ?? null),
@@ -2641,7 +2711,7 @@ const useGameStore = create<GameStore>((set, get) => ({
       : [];
 
 
-    const currentGlobalWeek = ((state.year ?? 1) - 1) * 20 + (state.week ?? 1);
+    const currentGlobalWeek = ((takeoverYear ?? 1) - 1) * 20 + (state.week ?? 1);
     const successorPartner: RelationshipConnection | null = child.partnerName
       ? {
           id: `generation_partner_${nextGeneration}`,
@@ -2748,14 +2818,14 @@ const useGameStore = create<GameStore>((set, get) => ({
         : { ...INITIAL_RELATIONSHIP_STATE.estatePlan },
     };
 
-    const transitionedFamilyTree = transitionFamilyTreeToChild(state, child.id, nextGeneration);
+    const transitionedFamilyTree = transitionFamilyTreeToChild({ ...state, year: takeoverYear }, child.id, nextGeneration);
 
     const newState: GameState = {
       ...INITIAL_GAME_STATE,
       playerName: child.name,
       week: state.week,
-      year: state.year,
-      age: preview.childAge,
+      year: takeoverYear,
+      age: Math.max(18, preview.childAge),
       cash: cashAfterTax,
       inflationMultiplier: state.inflationMultiplier,
       currentHousingId: child.homeStatus === 'homeowner' ? 'small_house' : 'studio_apartment',
@@ -2769,25 +2839,27 @@ const useGameStore = create<GameStore>((set, get) => ({
       totalWeeksWorked: 0,
       stocks: state.stocks ?? [],
       holdings: inheritedHoldings,
-      loans: [inheritanceLoan, estateSettlementLoan].filter((loan): loan is ActiveLoan => loan !== null),
+      loans: [inheritanceLoan, estateSettlementLoan, inheritedPersonalDebt].filter((loan): loan is ActiveLoan => loan !== null),
       bankDeposits: [],
       happiness: 45,
       netWorthHistory: [],
       earningsSinceLastTax: 0,
-      lastTaxWeek: state.lastTaxWeek,
+      lastTaxWeek: takeoverYear > state.year ? ((takeoverYear - 1) * 20 + state.week) : state.lastTaxWeek,
       totalTaxPaid: 0,
       unlockedAchievements: state.unlockedAchievements ?? [],
       statistics: {
         ...INITIAL_STATISTICS,
         highestCash: cashAfterTax,
-        highestNetWorth: cashAfterTax + inheritedBusinesses.reduce((sum, business) => sum + (business.valuation ?? 0), 0),
+        highestNetWorth: 0, // Set from getNetWorth after the complete new state is assembled.
       },
-      currentHeadline: `Generation ${nextGeneration}: ${child.name} continues the family legacy.`,
+      currentHeadline: guardianYears > 0
+        ? `After ${guardianYears} years of guardianship, ${child.name} takes over the family legacy.`
+        : `Generation ${nextGeneration}: ${child.name} continues the family legacy.`,
       initialized: true,
       tempHappinessEffects: [],
       pendingInvestments: [],
       recentEventIds: [],
-      businesses: inheritedBusinesses,
+      businesses: [...inheritedBusinesses, ...(childVenture ? [childVenture] : [])],
       holdingCompanies: inheritedHoldingCompanies,
       acquisitionTargets: [],
       lastAcquisitionRefreshWeek: 0,
@@ -2800,7 +2872,10 @@ const useGameStore = create<GameStore>((set, get) => ({
         playerHighestBid: 0,
         playerIsHighestBidder: false,
       })),
-      competitors: inheritedCompetitors,
+      competitors: {
+        ...inheritedCompetitors,
+        ...(childVenture ? { [childVenture.id]: createInitialCompetitors(childVenture, currentGlobalWeek) } : {}),
+      },
       activeMarketSentiment: state.activeMarketSentiment,
       activeMarketEvents: state.activeMarketEvents,
       totalRealizedProfitLoss: 0,
@@ -2822,6 +2897,7 @@ const useGameStore = create<GameStore>((set, get) => ({
       pinnedAchievementGoals: state.pinnedAchievementGoals ?? [],
     };
     newState.netWorthHistory = [getNetWorth(newState)];
+    newState.statistics.highestNetWorth = Math.max(0, newState.netWorthHistory[0]);
 
     set({
       ...newState,
@@ -2830,9 +2906,9 @@ const useGameStore = create<GameStore>((set, get) => ({
       showRelationshipEventModal: false,
       relationshipFeedback: {
         title: `Generation ${nextGeneration}`,
-        message: financeTaxWithLoan
-          ? `${child.name} inherited the estate and financed ${formatCurrencySafe(preview.inheritanceTax)} of inheritance tax with an 80-week estate loan.`
-          : `${child.name} inherited the estate and paid ${formatCurrencySafe(preview.inheritanceTax)} inheritance tax in cash.`,
+        message: inheritanceLoanPrincipal > 0
+          ? `${child.name} inherited the companies intact and financed ${formatCurrencySafe(inheritanceLoanPrincipal)} in tax over 80 weeks${guardianYears > 0 ? ` following ${guardianYears} years of guardianship` : ''}.`
+          : `${child.name} inherited the companies intact and paid ${formatCurrencySafe(preview.inheritanceTax)} inheritance tax in cash.`,
         positive: true,
       },
       periodIncome: 0,
@@ -2843,7 +2919,7 @@ const useGameStore = create<GameStore>((set, get) => ({
       periodJobChanges: 0,
       periodCoursesCompleted: 0,
       periodStocksPurchased: 0,
-      periodLoansTaken: Number(!!inheritanceLoan) + Number(!!estateSettlementLoan),
+      periodLoansTaken: Number(!!inheritanceLoan) + Number(!!estateSettlementLoan) + Number(!!inheritedPersonalDebt),
       periodLoansRepaid: 0,
       periodAchievements: 0,
       periodStartWeek: ((state.year - 1) * 20) + state.week,
