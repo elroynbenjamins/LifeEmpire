@@ -111,27 +111,35 @@ export function calculateEstateSettlement(state: GameState): EstateSettlement {
     if (childCurrentAge(child, state) >= 18) eligibleSuccessors.push({ id: child.id, name: child.name });
   }
   const successorName = eligibleSuccessors.find((item) => item.id === successorId)?.name ?? null;
-  const inheritableFamilyBusinesses = (state.businesses ?? [])
-    .filter((business) => business.familyBusiness?.isFamilyBusiness);
+  // Companies are durable dynasty assets. Any equity still owned by the player
+  // is reserved for succession, regardless of whether the company was manually
+  // designated as a Family Business before death.
+  const inheritableBusinesses = (state.businesses ?? [])
+    .filter((business) => getPlayerOwnershipPct(business) > 0);
   const inheritableHoldingIds = new Set(
-    inheritableFamilyBusinesses.map((business) => business.holdingCompanyId).filter(Boolean)
+    inheritableBusinesses.map((business) => business.holdingCompanyId).filter(Boolean)
   );
-  const familyBusinessEquity = inheritableFamilyBusinesses.reduce((sum, business) => {
+  const inheritableBusinessEquity = inheritableBusinesses.reduce((sum, business) => {
     const equity = Math.max(0, (business.valuation ?? 0) - getBusinessDebtPrincipal(business));
     return sum + equity * (getPlayerOwnershipPct(business) / 100);
   }, 0);
   const inheritableHoldingCash = (state.holdingCompanies ?? [])
     .filter((holding) => inheritableHoldingIds.has(holding.id))
     .reduce((sum, holding) => sum + Math.max(0, holding.cashReserve ?? 0), 0);
-  const grossBusinessValue = Math.max(0, familyBusinessEquity + inheritableHoldingCash);
-  // Costs unpaid by liquid assets become a liability of the business successor.
-  const businessSettlementDebt = successorName ? Math.max(0, grossBusinessValue - netEstate) : 0;
-  const businessValue = grossBusinessValue - businessSettlementDebt;
+  const grossBusinessValue = Math.max(0, inheritableBusinessEquity + inheritableHoldingCash);
 
-  // If a business successor was explicitly named, businesses pass outside the
-  // residual family split. This makes succession strategically meaningful and
-  // can create an illiquid inheritance-tax bill for the successor.
-  const distributableEstate = Math.max(0, netEstate - (successorName ? businessValue : 0));
+  // If liquid estate assets cannot cover administration/obligations, the
+  // continuing heir keeps the companies intact and carries the shortfall as
+  // an estate-settlement liability instead of being forced to sell them.
+  const businessSettlementDebt = grossBusinessValue > 0
+    ? Math.max(0, grossBusinessValue - netEstate)
+    : 0;
+  const businessValue = Math.max(0, grossBusinessValue - businessSettlementDebt);
+
+  // Business equity is reserved from the residual cash estate even if no heir
+  // was pre-designated. The child selected on the succession screen becomes the
+  // new controller, so continuity does not depend on a pre-death checkbox.
+  const distributableEstate = Math.max(0, netEstate - businessValue);
   const beneficiaries = allocateEstateShares(state, spouse, children, distributableEstate);
 
   return {
@@ -239,9 +247,12 @@ export function getSuccessionPreview(
     const equity = Math.max(0, (business.valuation ?? 0) - debt);
     return sum + equity * childPct / 100;
   }, 0);
-  const inheritsFamilyBusinesses = getEstateSuccessorId(state) === child.id;
-  const inheritedBusinessValue = inheritsFamilyBusinesses ? Math.min(estate.businessValue, estate.netEstate) : 0;
-  const businessSettlementDebt = inheritsFamilyBusinesses
+  // The playable heir always receives the deceased player's company stakes.
+  // A pre-designated successor remains useful as planning context, but it is no
+  // longer required to prevent ordinary companies from being liquidated.
+  const inheritsBusinesses = (state.businesses ?? []).some((business) => getPlayerOwnershipPct(business) > 0);
+  const inheritedBusinessValue = inheritsBusinesses ? Math.min(estate.businessValue, estate.netEstate) : 0;
+  const businessSettlementDebt = inheritsBusinesses
     ? (estate.businessSettlementDebt ?? Math.max(0, estate.businessValue - estate.netEstate))
     : 0;
 
@@ -285,7 +296,7 @@ export function getSuccessionPreview(
     inheritedPropertyValue,
     inheritedPropertyIds,
     inheritedBusinessValue,
-    inheritsFamilyBusinesses,
+    inheritsBusinesses,
     businessSettlementDebt,
     inheritanceTaxBase,
     inheritanceTax,
