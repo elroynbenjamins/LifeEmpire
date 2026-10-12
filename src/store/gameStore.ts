@@ -2514,21 +2514,20 @@ const useGameStore = create<GameStore>((set, get) => ({
         const familyOwnershipPct = ownership
           .filter((stake) => ['player', 'child', 'family_trust'].includes(stake.ownerType))
           .reduce((sum, stake) => sum + (stake.percent ?? 0), 0);
-        const continuesFamilyLegacy = inheritsParentStake || !!business.familyBusiness?.isFamilyBusiness;
+        const isDesignatedFamilyBusiness = !!business.familyBusiness?.isFamilyBusiness;
 
         return {
           ...business,
           ownership,
-          familyBusiness: continuesFamilyLegacy
+          // Inheritance preserves every company, but the explicit Family Business
+          // designation remains a separate strategic choice with its own bonuses.
+          familyBusiness: isDesignatedFamilyBusiness
             ? {
-                isFamilyBusiness: true,
-                familyName: business.familyBusiness?.familyName ?? `${state.playerName} Family`,
-                founderGeneration: business.familyBusiness?.founderGeneration ?? (state.generation ?? 1),
+                ...business.familyBusiness!,
                 generationsOwned: Math.max(1, business.familyBusiness?.generationsOwned ?? 1) + (inheritsParentStake ? 1 : 0),
                 controllerName: child.name,
                 controllerPersonId: `person:${child.id}`,
                 familyOwnershipPct,
-                designatedYear: business.familyBusiness?.designatedYear ?? state.year,
               }
             : (business.familyBusiness ?? null),
           familyRoles: (business.familyRoles ?? []).filter((role) => role.childId !== child.id),
