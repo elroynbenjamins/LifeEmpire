@@ -2546,6 +2546,22 @@ const useGameStore = create<GameStore>((set, get) => ({
         return {
           ...business,
           ownership,
+          // The guardianship years are intentionally time-skipped without
+          // simulating company operations. Move absolute decision/crisis due
+          // dates forward so the first adult week does not trigger stale events.
+          nextStrategicDecisionWeek: (business.nextStrategicDecisionWeek ?? 0) > 0
+            ? (business.nextStrategicDecisionWeek ?? 0) + preview.guardianshipWeeks
+            : business.nextStrategicDecisionWeek,
+          nextCrisisCheckWeek: (business.nextCrisisCheckWeek ?? 0) > 0
+            ? (business.nextCrisisCheckWeek ?? 0) + preview.guardianshipWeeks
+            : business.nextCrisisCheckWeek,
+          pendingDecision: business.pendingDecision && guardianYears > 0
+            ? {
+                ...business.pendingDecision,
+                createdGlobalWeek: business.pendingDecision.createdGlobalWeek + preview.guardianshipWeeks,
+                deadlineGlobalWeek: business.pendingDecision.deadlineGlobalWeek + preview.guardianshipWeeks,
+              }
+            : business.pendingDecision,
           strategyModifiers: [
             ...(business.strategyModifiers ?? []),
             ...(handoverModifier ? [handoverModifier] : []),
@@ -2642,12 +2658,20 @@ const useGameStore = create<GameStore>((set, get) => ({
     const childVentureBase = preview.existingVentureValue > 0
       ? createBusiness('digital_agency', `${child.name}'s Independent Venture`, state.week, takeoverYear, state.inflationMultiplier)
       : null;
+    // The venture equity was accumulated off-screen. Seed an earnings record
+    // that supports its existing value so normal business valuation does not
+    // erase the child's years of entrepreneurial progress on the first tick.
+    const ventureImpliedWeeklyProfit = Math.max(0, Math.round(preview.existingVentureValue / (20 * 3.025)));
     const childVenture: OwnedBusiness | null = childVentureBase
       ? {
           ...childVentureBase,
           id: `heir_venture_g${nextGeneration}_${child.id}`,
           valuation: preview.existingVentureValue,
           reputation: 50,
+          weeklyProfitHistory: Array(20).fill(ventureImpliedWeeklyProfit),
+          lastWeekProfit: ventureImpliedWeeklyProfit,
+          lastWeekRevenue: ventureImpliedWeeklyProfit * 3,
+          lastWeekExpenses: ventureImpliedWeeklyProfit * 2,
           autoStrategicDecisions: true,
           ownership: [{
             ownerType: 'player' as const,
