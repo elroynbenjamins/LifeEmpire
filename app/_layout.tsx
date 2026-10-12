@@ -62,6 +62,7 @@ function RootContent() {
           <Stack.Screen name="business" />
           <Stack.Screen name="prestige" />
           <Stack.Screen name="properties" />
+          <Stack.Screen name="property-auction" />
           <Stack.Screen name="info" />
           <Stack.Screen name="privacy" />
           <Stack.Screen name="relationships" />
