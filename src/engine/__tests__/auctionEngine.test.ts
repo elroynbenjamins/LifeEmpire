@@ -1,4 +1,4 @@
-import { auctionToProperty, ensureAuctions, getInspectionCost, inspectAuction, placeAuctionBid } from '../auctionEngine';
+import { auctionToProperty, ensureAuctions, getInspectionCost, getReservedAuctionBidTotal, inspectAuction, leaveAuction, placeAuctionBid } from '../auctionEngine';
 
 describe('real-estate auctions', () => {
   test('generates a playable early-game auction set', () => {
@@ -47,5 +47,53 @@ describe('real-estate auctions', () => {
     expect(generatedTypes.has('Luxury Auction')).toBe(true);
     expect(generatedTypes.has('Commercial Auction')).toBe(true);
     expect(generatedTypes.has('Development Land Auction')).toBe(true);
+  });
+
+  test('AI counterbids persist eliminated rivals and respect the minimum increase', () => {
+    const base = ensureAuctions([], 6, 1, 500_000)[0];
+    const amount = base.currentBid + base.minimumBidIncrease;
+    const auction = {
+      ...base,
+      aiBidders: [
+        { id: 'a', name: 'Conservative Investor', personality: 'Conservative' as const, maxBid: amount, active: true },
+        { id: 'b', name: 'Professional Investor', personality: 'Professional' as const, maxBid: amount + base.minimumBidIncrease * 3, active: true },
+      ],
+    };
+    const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+    let updated: typeof auction;
+    try {
+      updated = placeAuctionBid(auction, amount);
+    } finally {
+      random.mockRestore();
+    }
+    expect(updated.playerIsHighestBidder).toBe(false);
+    expect(updated.currentBid).toBe(amount + auction.minimumBidIncrease);
+    expect(updated.aiBidders[0].active).toBe(false);
+    expect(updated.aiBidders[1].active).toBe(true);
+    expect(auction.aiBidders[0].active).toBe(true); // Pure update, no mutation.
+  });
+
+  test('a leading player cannot bid against themselves and can withdraw', () => {
+    const base = ensureAuctions([], 8, 1, 500_000)[0];
+    const amount = base.currentBid + base.minimumBidIncrease;
+    const winning = placeAuctionBid({ ...base, aiBidders: [] }, amount);
+    expect(winning.playerIsHighestBidder).toBe(true);
+    expect(placeAuctionBid(winning, amount + winning.minimumBidIncrease)).toBe(winning);
+    const withdrawn = leaveAuction(winning);
+    expect(withdrawn.playerIsHighestBidder).toBe(false);
+    expect(withdrawn.playerHighestBid).toBe(0);
+    expect(withdrawn.currentBid).toBe(base.startingBid);
+  });
+
+  test('leading commitments are excluded from cash available to other auctions', () => {
+    const [a, b, c] = ensureAuctions([], 8, 1, 500_000);
+    const active = [
+      { ...a, currentBid: 12000, playerIsHighestBidder: true },
+      { ...b, currentBid: 18000, playerIsHighestBidder: true },
+      { ...c, currentBid: 10000, playerIsHighestBidder: false },
+    ];
+    expect(getReservedAuctionBidTotal(active)).toBe(30000);
+    expect(getReservedAuctionBidTotal(active, a.id)).toBe(18000);
+    expect(getReservedAuctionBidTotal(active, b.id)).toBe(12000);
   });
 });
