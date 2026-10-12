@@ -97,9 +97,66 @@ audit('endgame accounting audit', () => {
     useGameStore.getState().continueAsChild('heir', true);
     const next = useGameStore.getState();
     expect(next.loans.find(loan => loan.name === 'Unpaid Estate Settlement Costs')?.remainingAmount).toBe(preview.businessSettlementDebt);
-    expect(getNetWorth(next)).toBeCloseTo(preview.existingSavings + preview.inheritedBusinessValue + preview.inheritedCash - Math.ceil(preview.inheritanceTax * 1.06), 0);
+    expect(getNetWorth(next)).toBeCloseTo(preview.existingSavings + preview.inheritedBusinessValue + preview.inheritedCash - (preview.inheritanceTax - preview.loanNeeded) - Math.ceil(preview.loanNeeded * 1.06), 0);
   });
-  test('resetting personal statistics for a child does not reset world market trends', () => {
+  test('partial tax financing only borrows the shortfall and preserves the heir personal debts and venture', () => {
+    const state = fixture();
+    state.cash = 0;
+    state.holdingCompanies[0].cashReserve = 0;
+    state.relationshipState.children[0] = { ...child('heir'), savings: 4000, debt: 12000, adultStatus: 'entrepreneur', businessValue: 95000 };
+    const dead = die(state);
+    const preview = getSuccessionPreview(dead, 'heir', 'keep_both')!;
+    reset(dead);
+    useGameStore.getState().continueAsChild('heir', true, 'keep_both', 'modernize');
+    const next = useGameStore.getState();
+    expect(next.loans.find(loan => loan.name === 'Inheritance Tax Loan')?.originalAmount).toBe(preview.loanNeeded);
+    expect(next.loans.find(loan => loan.name === 'Existing Personal Debt')?.remainingAmount).toBe(12000);
+    expect(next.businesses.find(b => b.id === 'heir_venture_g2_heir')?.valuation).toBe(95000);
+    expect(next.businesses.find(b => b.id === state.businesses[0].id)?.strategyModifiers?.some(m => m.id === 'succession_modernize_g2')).toBe(true);
+    expect(next.statistics.highestNetWorth).toBe(Math.max(0, getNetWorth(next)));
+    expect(next.cash).toBe(Math.max(0, preview.existingSavings + preview.inheritedCash - (preview.inheritanceTax - preview.loanNeeded)));
+  });
+  test('full tax financing remains an intentional alternative to partial financing', () => {
+    const state = fixture();
+    const dead = die(state);
+    const preview = getSuccessionPreview(dead, 'heir')!;
+    reset(dead);
+    useGameStore.getState().continueAsChild('heir', 'full');
+    const next = useGameStore.getState();
+    expect(next.loans.find(loan => loan.name === 'Inheritance Tax Loan')?.originalAmount).toBe(preview.inheritanceTax);
+    expect(next.cash).toBeCloseTo(preview.existingSavings + preview.inheritedCash, 0);
+  });
+  test('a minor child can succeed at 18 via guardianship without liquidating companies or empty holdings', () => {
+    const state = fixture();
+    state.relationshipState.children = [{ ...child('young'), birthGlobalWeek: 401, age: 10, savings: 0, parentRelationship: 15 }];
+    state.relationshipState.estatePlan.successorId = 'young';
+    const standalone = { ...createHoldingCompany('Independent Reserve', state), id: 'empty_holding', cashReserve: 90000 };
+    state.holdingCompanies.push(standalone);
+    const dead = die(state);
+    const preview = getSuccessionPreview(dead, 'young')!;
+    expect(preview.guardianshipWeeks).toBe(160);
+    expect(preview.willingToSucceed).toBe(true);
+    reset(dead);
+    useGameStore.getState().continueAsChild('young', 'full');
+    const next = useGameStore.getState();
+    expect(next.age).toBe(18);
+    expect(next.year).toBe(state.year + 8);
+    expect(next.businesses.some(b => b.id === state.businesses[0].id)).toBe(true);
+    expect(next.holdingCompanies.find(h => h.id === 'empty_holding')?.cashReserve).toBe(90000);
+    expect(next.generation).toBe(2);
+    expect(next.statistics.highestNetWorth).toBe(Math.max(0, getNetWorth(next)));
+  });
+  test('designated heirs receive only a short transition morale bonus with no permanent family designation', () => {
+    const state = fixture();
+    state.businesses[0].familyBusiness = null;
+    reset(die(state));
+    useGameStore.getState().continueAsChild('heir', 'full', 'keep_both', 'preserve');
+    const business = useGameStore.getState().businesses[0];
+    expect(business.familyBusiness).toBeNull();
+    expect(business.strategyModifiers?.some(m => m.id === 'succession_preserve_g2' && m.weeksRemaining === 20)).toBe(true);
+    expect(business.strategyModifiers?.some(m => m.id === 'succession_prepared_g2' && m.weeksRemaining === 20)).toBe(true);
+  });
+    test('resetting personal statistics for a child does not reset world market trends', () => {
     const state = fixture();
     state.stocks = state.stocks.map(s => ({ ...s, currentPrice: s.currentPrice * 1.6, priceHistory: [s.currentPrice * 1.6] }));
     state.statistics = { ...state.statistics, weeksPlayed: 600 };
