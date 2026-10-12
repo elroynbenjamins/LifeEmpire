@@ -142,6 +142,9 @@ export interface EstateSettlement {
   administrationCost: number;
   netEstate: number;
   beneficiaries: EstateBeneficiaryShare[];
+  /** New settlements allocate each beneficiary against the whole net estate;
+   * older saves allocated only the liquid residue after reserving companies. */
+  allocationBasis?: 'net_estate';
   successorName: string | null;
   successorId?: string | null;
   businessSettlementDebt?: number;
@@ -170,6 +173,12 @@ export interface SuccessionPreview {
   inheritedPropertyValue: number;
   inheritedPropertyIds: string[];
   inheritedBusinessValue: number;
+  /** Full net-estate entitlement of the playable heir, before asset allocation. */
+  heirEstateEntitlement: number;
+  /** Liquid estate value reserved for other beneficiaries. */
+  otherBeneficiaryCash: number;
+  /** Interest-free buyout liability replacing forced sales of family companies. */
+  familySettlementDebt: number;
   /** True when the deceased player's company stakes transfer intact to this playable heir. */
   inheritsBusinesses: boolean;
   /** Estate/admin costs that could not be covered without liquidating inherited companies. */
