@@ -10,7 +10,7 @@ import { createBusiness, generateCandidates, candidateToEmployee, getBusinessTyp
 import { createProperty, renovateProperty, getTotalPropertyValue } from '../engine/propertyEngine';
 import { ensureAuctions, getInspectionCost, inspectAuction, leaveAuction, placeAuctionBid } from '../engine/auctionEngine';
 import { unlockPrestige, getPrestigeEffects } from '../engine/prestigeEngine';
-import { calculateChildInheritanceTax, getSuccessionPreview, getEstateSuccessorId } from '../engine/lifecycleEngine';
+import { calculateChildInheritanceTax, getSuccessionPreview } from '../engine/lifecycleEngine';
 import { createInitialFamilyTree, syncFamilyTree, transitionFamilyTreeToChild } from '../engine/familyTreeEngine';
 import { getCareerSalary, recordCareerLevel } from '../engine/careerEngine';
 import { applyEducationRewards } from '../engine/skillEngine';
@@ -2449,82 +2449,103 @@ const useGameStore = create<GameStore>((set, get) => ({
     if (!child || !preview || !preview.willingToSucceed) return;
     if (!financeTaxWithLoan && preview.taxCashAvailable < preview.inheritanceTax) return;
 
-    const estateSuccessorId = getEstateSuccessorId(state);
+    const inheritedParentHoldingIds = new Set(
+      (state.businesses ?? [])
+        .filter((business) => preview.inheritsBusinesses && getPlayerOwnershipPct(business) > 0)
+        .map((business) => business.holdingCompanyId)
+        .filter((holdingId): holdingId is string => !!holdingId)
+    );
+
     const inheritedBusinesses = (state.businesses ?? [])
-          .filter((business) => (preview.inheritsFamilyBusinesses && business.familyBusiness?.isFamilyBusiness)
-            || business.ownership?.some(stake => stake.ownerType === 'child' && stake.ownerId === child.id && stake.percent > 0))
-          .map((business) => {
-            const inheritsParentStake = preview.inheritsFamilyBusinesses && !!business.familyBusiness?.isFamilyBusiness;
-            const baseOwnership = business.ownership?.length
-              ? business.ownership
-              : [{
-                  ownerType: 'player' as const,
-                  ownerId: state.familyTree?.currentPlayerId ?? 'player',
-                  ownerName: state.playerName,
-                  percent: 100,
-                  votingPercent: 100,
-                }];
+      .filter((business) => {
+        const parentOwns = preview.inheritsBusinesses && getPlayerOwnershipPct(business) > 0;
+        const childOwns = business.ownership?.some(
+          (stake) => stake.ownerType === 'child' && stake.ownerId === child.id && stake.percent > 0
+        ) ?? false;
+        const trustOwns = business.ownership?.some(
+          (stake) => stake.ownerType === 'family_trust' && stake.percent > 0
+        ) ?? false;
+        const belongsToInheritedHolding = !!business.holdingCompanyId
+          && inheritedParentHoldingIds.has(business.holdingCompanyId);
+        return parentOwns || childOwns || trustOwns || belongsToInheritedHolding;
+      })
+      .map((business) => {
+        const inheritsParentStake = preview.inheritsBusinesses && getPlayerOwnershipPct(business) > 0;
+        const baseOwnership = business.ownership?.length
+          ? business.ownership
+          : [{
+              ownerType: 'player' as const,
+              ownerId: state.familyTree?.currentPlayerId ?? 'player',
+              ownerName: state.playerName,
+              percent: 100,
+              votingPercent: 100,
+            }];
 
-            const newPlayerPercent = baseOwnership
-              .filter((stake) =>
-                (inheritsParentStake && stake.ownerType === 'player')
-                || (stake.ownerType === 'child' && stake.ownerId === child.id)
-              )
-              .reduce((sum, stake) => sum + (stake.percent ?? 0), 0);
-            const newPlayerVotes = baseOwnership
-              .filter((stake) =>
-                (inheritsParentStake && stake.ownerType === 'player')
-                || (stake.ownerType === 'child' && stake.ownerId === child.id)
-              )
-              .reduce((sum, stake) => sum + (stake.votingPercent ?? 0), 0);
+        const newPlayerPercent = baseOwnership
+          .filter((stake) =>
+            (inheritsParentStake && stake.ownerType === 'player')
+            || (stake.ownerType === 'child' && stake.ownerId === child.id)
+          )
+          .reduce((sum, stake) => sum + (stake.percent ?? 0), 0);
+        const newPlayerVotes = baseOwnership
+          .filter((stake) =>
+            (inheritsParentStake && stake.ownerType === 'player')
+            || (stake.ownerType === 'child' && stake.ownerId === child.id)
+          )
+          .reduce((sum, stake) => sum + (stake.votingPercent ?? 0), 0);
 
-            const preservedOwnership = baseOwnership.filter((stake) =>
-              !(inheritsParentStake && stake.ownerType === 'player')
-              && !(stake.ownerType === 'child' && stake.ownerId === child.id)
-            ).map(stake => stake.ownerType === 'player' ? {
-              ...stake,
-              ownerType: 'investor' as const,
-              ownerId: estateSuccessorId ?? 'settled_estate',
-              ownerName: state.relationshipState.estateSettlement?.successorName ?? 'Estate beneficiaries',
-            } : stake);
-            const ownership = [
-              {
+        const preservedOwnership = baseOwnership.filter((stake) =>
+          !(inheritsParentStake && stake.ownerType === 'player')
+          && !(stake.ownerType === 'child' && stake.ownerId === child.id)
+        );
+        const ownership = [
+          ...(newPlayerPercent > 0.01
+            ? [{
                 ownerType: 'player' as const,
                 ownerId: `person:${child.id}`,
                 ownerName: child.name,
                 percent: newPlayerPercent,
                 votingPercent: newPlayerVotes,
-              },
-              ...preservedOwnership,
-            ].filter((stake) => (stake.percent ?? 0) > 0.01);
+              }]
+            : []),
+          ...preservedOwnership,
+        ].filter((stake) => (stake.percent ?? 0) > 0.01);
 
-            const familyOwnershipPct = ownership
-              .filter((stake) => ['player', 'child', 'family_trust'].includes(stake.ownerType))
-              .reduce((sum, stake) => sum + (stake.percent ?? 0), 0);
+        const familyOwnershipPct = ownership
+          .filter((stake) => ['player', 'child', 'family_trust'].includes(stake.ownerType))
+          .reduce((sum, stake) => sum + (stake.percent ?? 0), 0);
+        const continuesFamilyLegacy = inheritsParentStake || !!business.familyBusiness?.isFamilyBusiness;
 
-            return {
-              ...business,
-              ownership,
-              familyBusiness: {
-                ...(business.familyBusiness!),
-                generationsOwned: Math.max(1, business.familyBusiness?.generationsOwned ?? 1) + 1,
+        return {
+          ...business,
+          ownership,
+          familyBusiness: continuesFamilyLegacy
+            ? {
+                isFamilyBusiness: true,
+                familyName: business.familyBusiness?.familyName ?? `${state.playerName} Family`,
+                founderGeneration: business.familyBusiness?.founderGeneration ?? (state.generation ?? 1),
+                generationsOwned: Math.max(1, business.familyBusiness?.generationsOwned ?? 1) + (inheritsParentStake ? 1 : 0),
                 controllerName: child.name,
                 controllerPersonId: `person:${child.id}`,
                 familyOwnershipPct,
-              },
-              familyRoles: (business.familyRoles ?? []).filter((role) => role.childId !== child.id),
-              timeline: [
-                ...(business.timeline ?? []),
-                {
+                designatedYear: business.familyBusiness?.designatedYear ?? state.year,
+              }
+            : (business.familyBusiness ?? null),
+          familyRoles: (business.familyRoles ?? []).filter((role) => role.childId !== child.id),
+          timeline: [
+            ...(business.timeline ?? []),
+            ...(inheritsParentStake
+              ? [{
                   week: state.week,
                   year: state.year,
                   title: `👪 Passed to Generation ${(state.generation ?? 1) + 1}: ${child.name}`,
                   icon: '👪',
                   kind: 'event' as const,
-                },
-              ].slice(-50),
-            };
-          });
+                }]
+              : []),
+          ].slice(-50),
+        };
+      });
 
     const inheritanceLoanPrincipal = financeTaxWithLoan ? preview.inheritanceTax : 0;
     const estateSettlementLoan: ActiveLoan | null = preview.businessSettlementDebt > 0 ? {
@@ -2602,8 +2623,8 @@ const useGameStore = create<GameStore>((set, get) => ({
       .filter((holding) => inheritedHoldingIds.has(holding.id))
       .map((holding) => ({
         ...holding,
-        cashReserve: preview.inheritsFamilyBusinesses ? holding.cashReserve : 0,
-        generationsOwned: Math.max(1, holding.generationsOwned ?? 1) + 1,
+        cashReserve: inheritedParentHoldingIds.has(holding.id) ? holding.cashReserve : 0,
+        generationsOwned: Math.max(1, holding.generationsOwned ?? 1) + (inheritedParentHoldingIds.has(holding.id) ? 1 : 0),
         controllerName: child.name,
         controllerPersonId: `person:${child.id}`,
         executiveChildId: holding.executiveChildId === child.id ? null : (holding.executiveChildId ?? null),
