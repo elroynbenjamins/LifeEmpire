@@ -70,7 +70,7 @@ audit('endgame accounting audit', () => {
     state.relationshipState.children.push(child('sibling'));
     const dead = die(state);
     const preview = getSuccessionPreview(dead, 'heir', 'keep_both')!;
-    const heirShare = dead.relationshipState.estateSettlement.beneficiaries.find(share => share.id === 'heir')!.amount;
+    const heirShare = dead.relationshipState.estateSettlement.beneficiaries.find((share: { id: string; amount: number }) => share.id === 'heir')!.amount;
     expect(preview.heirEstateEntitlement).toBe(heirShare);
     expect(preview.familySettlementDebt).toBeGreaterThan(0);
     expect(preview.inheritedBusinessValue + preview.inheritedCash + preview.inheritedPropertyValue + preview.inheritedStockValue - preview.familySettlementDebt).toBeCloseTo(heirShare, 0);
