@@ -77,6 +77,18 @@ audit('endgame accounting audit', () => {
     expect(useGameStore.getState().holdingCompanies[0].cashReserve).toBe(500000);
     expect(useGameStore.getState().businesses[0].ownership!.reduce((sum, stake) => sum + stake.percent, 0)).toBe(100);
   });
+  test('an ordinary company transfers intact to the chosen child without becoming a designated Family Business', () => {
+    const state = fixture();
+    state.businesses[0].familyBusiness = null;
+    reset(die(state));
+    useGameStore.getState().continueAsChild('heir', true);
+    const inherited = useGameStore.getState().businesses.find(b => b.id === state.businesses[0].id);
+    expect(inherited).toBeDefined();
+    expect(inherited?.familyBusiness).toBeNull();
+    expect(inherited?.ownership?.some(s => s.ownerType === 'player' && s.percent === 100)).toBe(true);
+    expect(useGameStore.getState().holdingCompanies[0].cashReserve).toBe(500000);
+  });
+
   test('illiquid estate cannot distribute more than its net estate', () => {
     const state = fixture(); state.cash = 0; state.holdingCompanies[0].cashReserve = 0;
     const dead = die(state); const preview = getSuccessionPreview(dead, 'heir')!;
