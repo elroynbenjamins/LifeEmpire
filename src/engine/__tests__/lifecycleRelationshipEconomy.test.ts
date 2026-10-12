@@ -616,7 +616,8 @@ describe('expanded relationship progression', () => {
     const estate = calculateEstateSettlement(state);
     expect(estate.successorId).toBeNull();
     expect(estate.businessValue).toBe(300000);
-    expect(estate.beneficiaries[0].amount).toBe(estate.netEstate - estate.businessValue);
+    expect(estate.allocationBasis).toBe('net_estate');
+    expect(estate.beneficiaries[0].amount).toBe(estate.netEstate);
 
     const preview = getSuccessionPreview({
       ...state,
@@ -629,6 +630,67 @@ describe('expanded relationship progression', () => {
     expect(preview?.inheritsBusinesses).toBe(true);
     expect(preview?.inheritedBusinessValue).toBe(300000);
     expect(preview?.businessSettlementDebt).toBe(0);
+  });
+
+  it('allocates the full estate between spouse and children while compensating siblings without selling businesses', () => {
+    const spouse = {
+      id: 'spouse', name: 'Sophie', gender: 'woman', stage: 'married',
+    } as any;
+    const children = [
+      { id: 'first', name: 'Mila', gender: 'girl' as const, birthGlobalWeek: 1, age: 30, educationFund: 0, savings: 10000 },
+      { id: 'second', name: 'Finn', gender: 'boy' as const, birthGlobalWeek: 1, age: 30, educationFund: 0, savings: 10000 },
+    ];
+    const company = {
+      id: 'estate-company', name: 'Legacy Works', typeId: 'coffee_shop',
+      valuation: 900000, businessLoans: [],
+      ownership: [{ ownerType: 'player', ownerId: 'player:g1', ownerName: 'Parent', percent: 100, votingPercent: 100 }],
+    } as any;
+    const state = {
+      ...INITIAL_GAME_STATE,
+      year: 31, week: 1, cash: 100000, businesses: [company],
+      relationshipState: {
+        ...INITIAL_RELATIONSHIP_STATE,
+        partnerId: spouse.id,
+        activeConnections: [spouse],
+        children,
+      },
+    };
+    const estate = calculateEstateSettlement(state);
+    const deadState = { ...state, relationshipState: { ...state.relationshipState, estateSettlement: estate } };
+    expect(estate.allocationBasis).toBe('net_estate');
+    expect(estate.beneficiaries.reduce((sum, share) => sum + share.amount, 0)).toBe(estate.netEstate);
+    expect(estate.beneficiaries.find(share => share.relationship === 'spouse')?.share).toBe(0.5);
+    const preview = getSuccessionPreview(deadState, 'first')!;
+    const heirEntitlement = estate.beneficiaries.find(share => share.id === 'first')!.amount;
+    expect(preview.heirEstateEntitlement).toBe(heirEntitlement);
+    expect(preview.familySettlementDebt).toBe(estate.businessValue - heirEntitlement);
+    expect(preview.inheritedBusinessValue).toBe(estate.businessValue);
+    expect(preview.inheritanceTaxBase).toBe(heirEntitlement);
+    expect(preview.inheritedCash).toBe(0);
+    expect(preview.otherBeneficiaryCash).toBe(estate.netEstate - estate.businessValue);
+    expect(preview.inheritedBusinessValue + preview.inheritedCash - preview.familySettlementDebt).toBe(heirEntitlement);
+  });
+
+  it('does not recalculate allocations in old saved estate settlements', () => {
+    const child = { id: 'legacy', name: 'Old Heir', gender: 'boy' as const, birthGlobalWeek: 1, age: 28, educationFund: 0 };
+    const state = {
+      ...INITIAL_GAME_STATE,
+      year: 30, week: 1,
+      relationshipState: {
+        ...INITIAL_RELATIONSHIP_STATE,
+        children: [child],
+        estateSettlement: {
+          netEstate: 1000000, businessValue: 900000, grossEstate: 1000000,
+          administrationCost: 0, outstandingRelationshipObligations: 0,
+          beneficiaries: [{ id: child.id, name: child.name, relationship: 'child' as const, share: 1, amount: 100000 }],
+          successorName: child.name,
+        },
+      },
+    };
+    const preview = getSuccessionPreview(state, child.id)!;
+    expect(preview.familySettlementDebt).toBe(0);
+    expect(preview.inheritanceTaxBase).toBe(1000000);
+    expect(preview.inheritedCash).toBe(100000);
   });
 
   it('lets independent adult children progress into homes, partners, businesses and children', () => {
