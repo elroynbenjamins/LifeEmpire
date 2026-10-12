@@ -16,7 +16,7 @@ import { getTotalPropertyValue, getPropertyWeeklyRent } from '../src/engine/prop
 import { getPrestigeEffects } from '../src/engine/prestigeEngine';
 import propertiesData from '../src/data/properties.json';
 import { showGameDialog } from '../src/components/GameDialog';
-import { getInspectionCost } from '../src/engine/auctionEngine';
+import { getInspectionCost, getReservedAuctionBidTotal } from '../src/engine/auctionEngine';
 import { propertyItemImages } from '../src/assets/itemImages';
 
 export default function PropertiesScreen() {
@@ -286,6 +286,10 @@ export default function PropertiesScreen() {
             <Text style={styles.sectionTitle}>Live Auctions</Text>
             <Text style={styles.sectionSub}>Inspect selectively and bid only when the spread makes sense.</Text>
           </View>
+          <Text style={styles.investmentMeta}>
+            Cash committed to leading offers: {formatCurrency(getReservedAuctionBidTotal(activeAuctions))}.
+            Weekly expenses can still affect final settlement.
+          </Text>
           {activeAuctions.map((auction) => {
             const expanded = expandedAuctionId === auction.id;
             const remaining = Math.max(0, auction.auctionEndWeek - globalWeek);
@@ -293,8 +297,13 @@ export default function PropertiesScreen() {
             const strongBid = minimumBid + auction.minimumBidIncrease * 2;
             const aggressiveBid = minimumBid + auction.minimumBidIncrease * 6;
             const inspectCost = getInspectionCost(auction);
-            const canBid = cash >= minimumBid;
-            const bid = (amount: number) => confirmAction('Place Auction Bid', `Bid ${formatCurrency(amount)} on ${auction.propertyName}? Other bidders may counter immediately.`, () => placePropertyAuctionBid?.(auction.id, amount));
+            const rivals = auction.aiBidders.filter((bidder) => bidder.active);
+            const availableToBid = Math.max(0, cash - getReservedAuctionBidTotal(activeAuctions, auction.id));
+            const freeCash = Math.max(0, cash - getReservedAuctionBidTotal(activeAuctions));
+            const canBid = !auction.playerIsHighestBidder && availableToBid >= minimumBid;
+            const comparisonBid = auction.playerIsHighestBidder ? auction.currentBid : minimumBid;
+            const cautiousSpread = auction.estimatedValueMin - comparisonBid;
+            const bid = (amount: number) => confirmAction('Place Auction Bid', `Bid ${formatCurrency(amount)} on ${auction.propertyName}? Rivals may counter immediately. You will need cash available when the auction closes.`, () => placePropertyAuctionBid?.(auction.id, amount));
 
             return (
               <GameCard key={auction.id} compact style={styles.propCard}>
@@ -311,7 +320,7 @@ export default function PropertiesScreen() {
                       <StatusPill
                         compact
                         icon={auction.playerIsHighestBidder ? 'checkmark-circle-outline' : auction.playerHighestBid > 0 ? 'alert-circle-outline' : 'people-outline'}
-                        label={auction.playerIsHighestBidder ? 'Highest bidder' : auction.playerHighestBid > 0 ? 'Outbid' : `${auction.aiBidders.length} bidders`}
+                        label={auction.playerIsHighestBidder ? 'Highest bidder' : auction.playerHighestBid > 0 ? 'Outbid' : `${rivals.length} active rivals`}
                         color={auction.playerIsHighestBidder ? Colors.primary : auction.playerHighestBid > 0 ? Colors.negative : Colors.textSecondary}
                       />
                     </View>
@@ -343,7 +352,7 @@ export default function PropertiesScreen() {
                     compact
                     accentColor={Colors.business}
                     icon="hammer-outline"
-                    label={canBid ? `Bid ${formatCurrency(minimumBid)}` : 'Need cash'}
+                    label={auction.playerIsHighestBidder ? 'You are leading' : canBid ? `Bid ${formatCurrency(minimumBid)}` : 'Need cash'}
                     onPress={() => bid(minimumBid)}
                     disabled={!canBid}
                     style={styles.cardAction}
@@ -352,12 +361,39 @@ export default function PropertiesScreen() {
 
                 {expanded && (
                   <View style={styles.detailsBox}>
+                    <View style={styles.auctionInsight}>
+                      <Text style={styles.insightTitle}>
+                        {cautiousSpread >= 0
+                          ? `${formatCurrency(cautiousSpread)} below the low value estimate`
+                          : `${formatCurrency(Math.abs(cautiousSpread))} above the low value estimate`}
+                      </Text>
+                      <Text style={styles.insightNote}>
+                        Value estimates are uncertain. Your bid is not the full cost of ownership.
+                      </Text>
+                      <Text style={styles.insightNote}>
+                        {rivals.length > 0
+                          ? `${rivals.length} rival(s) can still raise: ${rivals.slice(0, 3).map((rival) => `${rival.name} (${rival.personality})`).join(', ')}${rivals.length > 3 ? '…' : ''}`
+                          : 'No rivals currently have room for another minimum raise.'}
+                      </Text>
+                      {auction.playerHighestBid > 0 && (
+                        <Text style={styles.insightNote}>
+                          {auction.playerIsHighestBidder ? 'Your offer is leading. You can wait or withdraw.' : 'You were outbid. Raise again or leave it.'}
+                        </Text>
+                      )}
+                    </View>
                     <View style={styles.detailGrid}>
                       <View style={styles.detailCell}><Text style={styles.miniLabel}>Rent / month</Text><Text style={styles.detailValue}>{formatCurrency(auction.expectedWeeklyRent * 4)}</Text></View>
                       <View style={styles.detailCell}><Text style={styles.miniLabel}>Condition</Text><Text style={styles.detailValue}>{auction.conditionKnown ? `${auction.conditionScore}/100` : 'Unknown'}</Text></View>
                       <View style={styles.detailCell}><Text style={styles.miniLabel}>Tenant</Text><Text style={styles.detailValue} numberOfLines={1}>{auction.tenantStatusKnown ? auction.tenantStatus : 'Unknown'}</Text></View>
                       <View style={styles.detailCell}><Text style={styles.miniLabel}>Renovation</Text><Text style={styles.detailValue} numberOfLines={1}>{auction.inspectionPurchased ? `${formatCurrency(auction.estimatedRenovationCostMin)} – ${formatCurrency(auction.estimatedRenovationCostMax)}` : 'Unknown'}</Text></View>
                     </View>
+
+                    {auction.inspectionPurchased && (
+                      <Text style={styles.investmentMeta}>
+                        Estimated bid + repairs: {formatCurrency(comparisonBid + auction.estimatedRenovationCostMin)} – {formatCurrency(comparisonBid + auction.estimatedRenovationCostMax)}.
+                        Further defects or fees may increase the actual cost.
+                      </Text>
+                    )}
 
                     {auction.hiddenIssueKnown && auction.hiddenIssue && (
                       <View style={styles.issueStrip}>
@@ -372,9 +408,9 @@ export default function PropertiesScreen() {
                         variant="secondary"
                         accentColor={Colors.info}
                         icon="search-outline"
-                        label={cash >= inspectCost ? `Inspect • ${formatCurrency(inspectCost)}` : `Need ${formatCurrency(inspectCost)}`}
+                        label={freeCash >= inspectCost ? `Inspect • ${formatCurrency(inspectCost)}` : `Need ${formatCurrency(inspectCost)}`}
                         onPress={() => confirmAction('Property Inspection', `Spend ${formatCurrency(inspectCost)} to reveal condition, tenant status and a narrower estimate?`, () => inspectPropertyAuction?.(auction.id))}
-                        disabled={cash < inspectCost}
+                        disabled={freeCash < inspectCost}
                       />
                     )}
 
@@ -385,7 +421,7 @@ export default function PropertiesScreen() {
                         accentColor={Colors.business}
                         label={`Strong • ${formatCurrency(strongBid)}`}
                         onPress={() => bid(strongBid)}
-                        disabled={cash < strongBid}
+                        disabled={auction.playerIsHighestBidder || availableToBid < strongBid}
                         style={styles.cardAction}
                       />
                       <GameButton
@@ -394,13 +430,13 @@ export default function PropertiesScreen() {
                         accentColor={Colors.warning}
                         label={`Aggressive • ${formatCurrency(aggressiveBid)}`}
                         onPress={() => bid(aggressiveBid)}
-                        disabled={cash < aggressiveBid}
+                        disabled={auction.playerIsHighestBidder || availableToBid < aggressiveBid}
                         style={styles.cardAction}
                       />
                     </View>
 
                     {auction.playerHighestBid > 0 && (
-                      <GameButton compact variant="ghost" label="Leave Auction" icon="exit-outline" onPress={() => leavePropertyAuction?.(auction.id)} />
+                      <GameButton compact variant="ghost" label={auction.playerIsHighestBidder ? 'Withdraw offer' : 'Clear bid / leave'} icon="exit-outline" onPress={() => leavePropertyAuction?.(auction.id)} />
                     )}
                   </View>
                 )}
@@ -454,4 +490,7 @@ const styles = StyleSheet.create({
   detailCell: { flexBasis: '47%', flexGrow: 1, backgroundColor: Colors.card, borderRadius: 8, padding: 7 },
   detailValue: { color: Colors.textPrimary, fontSize: 10, fontWeight: '700', marginTop: 2 },
   bidOptions: { flexDirection: 'row', gap: 6, marginTop: 4 },
+  auctionInsight: { backgroundColor: Colors.elevated, borderColor: Colors.cardBorder, borderWidth: 1, borderRadius: 8, padding: 9, gap: 4 },
+  insightTitle: { fontSize: 12, fontWeight: '800', color: Colors.textPrimary },
+  insightNote: { fontSize: 10, lineHeight: 15, color: Colors.textMuted },
 });
