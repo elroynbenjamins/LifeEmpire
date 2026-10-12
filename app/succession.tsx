@@ -113,13 +113,13 @@ export default function SuccessionScreen() {
                   </View>
                 )}
 
-                {estate.businessValue > 0 && (
+                {(state.businesses?.length ?? 0) > 0 && (
                   <View style={styles.callout}>
-                    <Text style={styles.calloutTitle}>Family Business Succession</Text>
+                    <Text style={styles.calloutTitle}>Business Continuity</Text>
                     <Text style={styles.calloutText}>
-                      {estate.successorName
-                        ? `${estate.successorName} was designated to inherit the player’s family-business equity worth ${formatCurrency(estate.businessValue)}.`
-                        : `No business successor was designated for ${formatCurrency(estate.businessValue)} of family-business equity.`}
+                      Your companies do not need to be sold. The ownership you built transfers intact to the child you continue as.
+                      {estate.businessValue > 0 ? ` ${formatCurrency(estate.businessValue)} of business equity is reserved for the next generation.` : ''}
+                      {estate.successorName ? ` ${estate.successorName} was your planned successor, but you can still choose another eligible child now.` : ''}
                     </Text>
                   </View>
                 )}
@@ -205,12 +205,12 @@ export default function SuccessionScreen() {
         {step === 2 && selectedChild && preview && (
           <>
             <Text style={styles.title}>3. Settle Tax & Assets</Text>
-            <Text style={styles.intro}>Decide which inherited assets remain intact. Keeping illiquid assets can force the new generation to finance inheritance tax.</Text>
+            <Text style={styles.intro}>Your companies transfer intact automatically. Choose whether stocks and property should also be preserved; keeping more illiquid assets can require inheritance-tax financing.</Text>
 
             <GameCard title={`${selectedChild.name}’s Inheritance`}>
               <View style={styles.strategyGrid}>
                 {([
-                  ['liquidate', 'Cash', 'Sell inherited stocks and property.'],
+                  ['liquidate', 'Cash', 'Sell inherited stocks and property; companies remain intact.'],
                   ['keep_stocks', 'Keep Stocks', 'Retain market holdings where the inheritance share permits.'],
                   ['keep_properties', 'Keep Property', 'Retain whole inherited properties where possible.'],
                   ['keep_both', 'Keep Both', 'Preserve stocks and property; lowest liquidity.'],
@@ -228,7 +228,7 @@ export default function SuccessionScreen() {
               <MoneyRow label="Cash inherited" value={preview.inheritedCash} />
               {preview.inheritedStockValue > 0 && <MoneyRow label="Stocks retained" value={preview.inheritedStockValue} />}
               {preview.inheritedPropertyValue > 0 && <MoneyRow label="Property retained" value={preview.inheritedPropertyValue} />}
-              {preview.inheritedBusinessValue > 0 && <MoneyRow label="Family-business equity" value={preview.inheritedBusinessValue} />}
+              {preview.inheritsBusinesses && <MoneyRow label="Companies transferred intact" value={preview.inheritedBusinessValue} />}
               <View style={styles.divider} />
               <MoneyRow label="Inheritance tax" value={-preview.inheritanceTax} negative strong />
               {preview.businessSettlementDebt > 0 && (
