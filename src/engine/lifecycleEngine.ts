@@ -116,15 +116,13 @@ export function calculateEstateSettlement(state: GameState): EstateSettlement {
   // designated as a Family Business before death.
   const inheritableBusinesses = (state.businesses ?? [])
     .filter((business) => getPlayerOwnershipPct(business) > 0);
-  const inheritableHoldingIds = new Set(
-    inheritableBusinesses.map((business) => business.holdingCompanyId).filter(Boolean)
-  );
   const inheritableBusinessEquity = inheritableBusinesses.reduce((sum, business) => {
     const equity = Math.max(0, (business.valuation ?? 0) - getBusinessDebtPrincipal(business));
     return sum + equity * (getPlayerOwnershipPct(business) / 100);
   }, 0);
+  // A holding company is an owned asset even if its final subsidiary was sold.
+  // Include standalone reserves so they do not vanish during the transfer.
   const inheritableHoldingCash = (state.holdingCompanies ?? [])
-    .filter((holding) => inheritableHoldingIds.has(holding.id))
     .reduce((sum, holding) => sum + Math.max(0, holding.cashReserve ?? 0), 0);
   const grossBusinessValue = Math.max(0, inheritableBusinessEquity + inheritableHoldingCash);
 
@@ -234,11 +232,16 @@ export function getSuccessionPreview(
 ) {
   const child = (state.relationshipState?.children ?? []).find((item) => item.id === childId);
   const estate = state.relationshipState?.estateSettlement;
-  if (!child || !estate || childCurrentAge(child, state) < 18) return null;
+  if (!child || !estate) return null;
 
   const beneficiary = (estate.beneficiaries ?? []).find((item) => item.id === childId);
   const distributableShare = Math.max(0, beneficiary?.amount ?? 0);
   const existingSavings = Math.max(0, child.savings ?? 0);
+  const existingDebt = Math.max(0, child.debt ?? 0);
+  const existingVentureValue = Math.max(0, child.businessValue ?? 0);
+  const actualChildAge = childCurrentAge(child, state);
+  const guardianshipWeeks = Math.max(0, 18 - actualChildAge) * 20;
+  const preparedSuccessor = state.relationshipState?.estatePlan?.successorId === child.id;
   const existingBusinessStakeValue = (state.businesses ?? []).reduce((sum, business) => {
     const childPct = (business.ownership ?? [])
       .filter((stake) => stake.ownerType === 'child' && stake.ownerId === child.id)
@@ -289,8 +292,12 @@ export function getSuccessionPreview(
   return {
     childId: child.id,
     childName: child.name,
-    childAge: childCurrentAge(child, state),
+    childAge: actualChildAge,
+    guardianshipWeeks,
+    preparedSuccessor,
     existingSavings,
+    existingDebt,
+    existingVentureValue,
     existingBusinessStakeValue,
     assetStrategy,
     inheritedCash,
@@ -305,7 +312,7 @@ export function getSuccessionPreview(
     taxCashAvailable,
     loanNeeded,
     parentRelationship,
-    willingToSucceed: parentRelationship >= 30,
+    willingToSucceed: guardianshipWeeks > 0 || parentRelationship >= 30,
     futurePotentialScore: potential.score,
     futurePotentialLabel: potential.label,
   };
