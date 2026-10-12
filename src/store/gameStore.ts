@@ -2684,9 +2684,6 @@ const useGameStore = create<GameStore>((set, get) => ({
     const inheritedCompetitors = Object.fromEntries(
       inheritedBusinesses.map((business) => [business.id, state.competitors?.[business.id] ?? []])
     );
-    const inheritedHoldingIds = new Set(
-      inheritedBusinesses.map((business) => business.holdingCompanyId).filter(Boolean)
-    );
     const inheritedHoldingCompanies = (state.holdingCompanies ?? [])
       .map((holding) => ({
         ...holding,
