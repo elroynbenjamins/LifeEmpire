@@ -18,11 +18,12 @@ export default function EmpireCardTile({ card, selected, reduceMotion, onPress }
   reduceMotion: boolean;
   onPress: () => void;
 }) {
-  const lift = useRef(new Animated.Value(selected ? 1 : 0)).current;
+  const lift = useRef(new Animated.Value(selected && !reduceMotion ? 1 : 0)).current;
   useEffect(() => {
     lift.stopAnimation();
     if (reduceMotion) {
-      lift.setValue(selected ? 1 : 0);
+      // Keep a static selection border, without any motion or displacement.
+      lift.setValue(0);
       return;
     }
     Animated.timing(lift, {
