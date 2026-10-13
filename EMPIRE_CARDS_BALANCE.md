@@ -156,6 +156,38 @@ To reduce the Finance/Diversified advantage, **Venture Capitalist** now gives ×
 
 A 100-seed simulated full-run comparison now gives **34 Sales, 33 Operations, 62 Finance, 38 Innovation, and 66 Diversified wins**. All remain viable. Finance and Diversified still lead in this particular baseline; adjust further only if actual gameplay and larger sample testing confirm imbalance.
 
+## Achievements and optional challenges (2026-10-13)
+
+**Empire Cards-only, cosmetic progress.** No Life Empire gems, cash, Prestige Points, inventory items, ad rewards or scoring/Run Capital bonuses are awarded for these medals. The gameplay targets, base card count, Advisors and boss mechanics are unchanged.
+
+### 12 permanent achievements
+
+- First Deal — play a hand
+- Open for Business — clear quarter 1
+- Deal Maker — play Joint Venture
+- Four Pillars — play Diversified Empire
+- Industry Leader — play Industry Dominance
+- Supply Strategist — play Supply Chain
+- Innovation Investor — play Startup Accelerator
+- Market Pioneer — play Market Expansion
+- Executive Board — equip four Advisors
+- Crisis Manager — clear a boss quarter
+- Empire Builder — complete eight quarters on any difficulty
+- Legendary Tycoon — complete all eight quarters on Tycoon
+
+### 4 opt-in objectives per run
+
+- Three Big Deals — 3 Joint Venture hands within the same run
+- Four-Pillar Plan — 4 Diversified Empire hands within the same run
+- Clean Audit — clear any boss quarter without using a discard **during that quarter**
+- No Safety Net — complete an eight-quarter run without discarding at any point
+
+Players can choose **none or one** additional objective before beginning. Selection is fixed for the run. Progress and completion are part of optional fields on the existing version-1 run save, so older runs continue to load. Permanent medal IDs are stored independently under a versioned, save-slot-scoped key and are idempotent across restarts. On loading a pre-medal run, only milestones that can be proven from existing fields are recovered; old combinations are not guessed.
+
+The **Medal Cabinet** is collapsed by default, with compact Achievements/Challenges tabs and a passive inline unlock message—no extra pop-ups or reward claims.
+
+Implementation: \`src/engine/empireCardsMedals.ts\`, \`src/engine/empireCardsEngine.ts\`, \`app/empire-cards.tsx\`; regression tests: \`src/engine/__tests__/empireCardsMedals.test.ts\`.
+
 ## Future work
 
 1. Manual mobile playtesting: small phones, card text, one-handed actions, scrolling, help discoverability and save/resume.
