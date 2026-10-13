@@ -75,6 +75,24 @@ export const EMPIRE_CARD_ICONS: Record<string, IconName> = {
   'innovation-8': 'sparkles-outline',
 };
 
+export const EMPIRE_ADVISOR_ICONS: Record<string, IconName> = {
+  brand: 'megaphone-outline', operator: 'construct-outline', cfo: 'calculator-outline',
+  rnd: 'flask-outline', franchise: 'storefront-outline', lean: 'settings-outline',
+  venture: 'trending-up-outline', lab: 'beaker-outline', family: 'people-outline',
+  tax: 'receipt-outline', logistics: 'cube-outline', digital: 'hardware-chip-outline',
+  mergers: 'git-merge-outline', trainer: 'school-outline', crisis: 'shield-checkmark-outline',
+};
+
+export const EMPIRE_ADVISOR_RARITY_COLORS: Record<'common' | 'uncommon' | 'rare', string> = {
+  common: '#94A3B8',
+  uncommon: '#41B9CB',
+  rare: '#BE9AF7',
+};
+
+export function getEmpireAdvisorIcon(advisorId: string): IconName {
+  return EMPIRE_ADVISOR_ICONS[advisorId] ?? 'person-circle-outline';
+}
+
 export function getEmpireCardTier(points: number): EmpireCardTier {
   return points >= 32 ? 'flagship' : points >= 26 ? 'growth' : 'core';
 }
