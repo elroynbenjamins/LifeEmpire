@@ -13,7 +13,7 @@ import {
   EMPIRE_ADVISORS, EMPIRE_BOSSES, EMPIRE_CARDS, EMPIRE_COMBOS, EMPIRE_QUARTERS,
   EmpireRun, buyEmpireOffer, createEmpireRun, currentBoss, discardEmpireCards,
   isEmpireRun, nextEmpireQuarter, playEmpireHand, previewEmpireHand,
-  quarterTarget, rerollEmpireShop,
+  quarterTarget, rerollEmpireShop, retireEmpireCard, suggestEmpireHand, trainEmpireCombo,
 } from '../src/engine/empireCardsEngine';
 
 const CARD_MAP = Object.fromEntries(EMPIRE_CARDS.map(c => [c.id, c]));
@@ -28,14 +28,16 @@ export default function EmpireCardsScreen() {
   const router = useRouter();
   const activeSlot = useGameStore(s => s.activeSlot ?? 0);
   const storageKey = 'life-empire-cards:v1:slot:' + activeSlot;
-  const [ready, setReady] = useState(false);
+  const [readyKey, setReadyKey] = useState<string | null>(null);
   const [run, setRun] = useState<EmpireRun | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [mode, setMode] = useState<'play' | 'discard'>('play');
   const [showGuide, setShowGuide] = useState(false);
+  const [shopPanel, setShopPanel] = useState<'offers' | 'training' | 'retire'>('offers');
+  const [retireDepartment, setRetireDepartment] = useState<'sales' | 'operations' | 'finance' | 'innovation'>('sales');
   useEffect(() => {
     let active = true;
-    setReady(false);
+    setReadyKey(null);
     setRun(null);
     setSelected([]);
     AsyncStorage.getItem(storageKey).then(value => {
@@ -46,15 +48,16 @@ export default function EmpireCardsScreen() {
       } catch {
         setRun(null);
       }
-      setReady(true);
-    }).catch(() => { if (active) setReady(true); });
+      setReadyKey(storageKey);
+    }).catch(() => { if (active) setReadyKey(storageKey); });
     return () => { active = false; };
   }, [storageKey]);
   useEffect(() => {
-    if (!ready) return;
+    // Never write the previous save slot's run into a newly selected slot.
+    if (readyKey !== storageKey) return;
     const pending = run ? AsyncStorage.setItem(storageKey, JSON.stringify(run)) : AsyncStorage.removeItem(storageKey);
     void pending.catch(() => {});
-  }, [ready, run, storageKey]);
+  }, [readyKey, run, storageKey]);
 
   const update = (transform: (value: EmpireRun) => EmpireRun) => {
     setRun(previous => previous ? transform(previous) : previous);
@@ -83,7 +86,7 @@ export default function EmpireCardsScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScreenHeader title="Empire Cards" subtitle="Business strategy · No timer" onBack={() => router.back()} showBack accentColor={Colors.business} showHud={false} />
       <ScrollView contentContainerStyle={styles.content}>
-        {!ready ? <Text style={styles.muted}>Loading saved run...</Text> : !run ? (
+        {readyKey !== storageKey ? <Text style={styles.muted}>Loading saved run...</Text> : !run ? (
           <>
             <GameCard variant="hero" title="Build a Business Empire" eyebrow="OPTIONAL ACTIVITY" accentColor={Colors.business}>
               <Text style={styles.description}>Play powerful combinations of Sales, Operations, Finance and Innovation cards. Add Advisors, upgrade your strategy and defeat economic crises.</Text>
@@ -154,7 +157,11 @@ export default function EmpireCardsScreen() {
                     </>
                   )}
                 </View>
-                <Text style={styles.note}>Play up to 3 hands to reach the target. Discard up to 4 cards per discard action. No timer.</Text>
+                <View style={styles.actionRow}>
+                  <View style={styles.flex}><GameButton label="Suggest Best Hand" icon="bulb-outline" variant="ghost" compact onPress={() => { setMode('play'); setSelected(suggestEmpireHand(run)); }} /></View>
+                  <View style={styles.flex}><GameButton label="Clear Selection" icon="close-outline" variant="ghost" compact disabled={!selected.length} onPress={() => setSelected([])} /></View>
+                </View>
+                <Text style={styles.note}>Play up to {run.quarter >= 5 ? 4 : 3} hands to reach the target. Discard up to 4 cards per discard action. No timer.</Text>
               </GameCard>
             )}
 
@@ -170,8 +177,37 @@ export default function EmpireCardsScreen() {
                   </View>;
                 })}
                 <View style={styles.actionRow}>
-                  <View style={styles.flex}><GameButton label="Reroll · 2" compact icon="refresh" variant="secondary" disabled={run.capital < 2} onPress={() => update(r => rerollEmpireShop(r))} /></View>
-                  <View style={styles.flex}><GameButton label="Next Quarter" compact icon="arrow-forward" onPress={() => update(nextEmpireQuarter)} /></View>
+                  <View style={styles.flex}><GameButton label="Train Combos" icon="school-outline" compact variant={shopPanel === 'training' ? 'primary' : 'secondary'} onPress={() => setShopPanel(shopPanel === 'training' ? 'offers' : 'training')} /></View>
+                  <View style={styles.flex}><GameButton label="Trim Deck" icon="cut-outline" compact variant={shopPanel === 'retire' ? 'primary' : 'secondary'} onPress={() => setShopPanel(shopPanel === 'retire' ? 'offers' : 'retire')} /></View>
+                </View>
+                {shopPanel === 'training' && <View style={styles.shopPanel}>
+                  <Text style={styles.description}>Target your strongest strategy. Each training adds ×0.25 to its scoring multiplier (maximum level 4).</Text>
+                  {EMPIRE_COMBOS.map(combo => {
+                    const level = run.upgrades[combo.id] ?? 0;
+                    const cost = 7 + level * 2;
+                    return <View key={combo.id} style={styles.offer}>
+                      <View style={styles.flex}><Text style={styles.title}>{combo.name} · Lv {level}/4</Text><Text style={styles.note}>×{(combo.multiplier + level * 0.25).toFixed(2)} now · +0.25 next</Text></View>
+                      <GameButton label={level === 4 ? 'Max' : cost + ' Capital'} compact disabled={level >= 4 || run.capital < cost} onPress={() => update(r => trainEmpireCombo(r, combo.id))} />
+                    </View>;
+                  })}
+                </View>}
+                {shopPanel === 'retire' && <View style={styles.shopPanel}>
+                  <Text style={styles.description}>Remove weaker cards so your preferred departments appear more often. Maximum four removals per run.</Text>
+                  <View style={styles.factRow}>
+                    {(['sales', 'operations', 'finance', 'innovation'] as const).map(d => <Pressable key={d} accessibilityRole="button" onPress={() => setRetireDepartment(d)} style={[styles.departmentChip, retireDepartment === d && styles.departmentChipActive]}><Text style={styles.departmentChipText}>{DEPARTMENT_ICONS[d]} {d}</Text></Pressable>)}
+                  </View>
+                  {EMPIRE_CARDS.filter(c => c.department === retireDepartment && [...run.deck, ...run.hand, ...run.discarded].includes(c.id)).map(c => {
+                    const cost = 4 + (run.retiredCards ?? 0) * 2;
+                    const totalCards = run.deck.length + run.hand.length + run.discarded.length;
+                    return <View key={c.id} style={styles.offer}>
+                      <View style={styles.flex}><Text style={styles.title}>{c.name}</Text><Text style={styles.note}>{c.points} base points</Text></View>
+                      <GameButton label={cost + ' Capital'} compact variant="secondary" disabled={run.capital < cost || (run.retiredCards ?? 0) >= 4 || totalCards <= 20} onPress={() => update(r => retireEmpireCard(r, c.id))} />
+                    </View>;
+                  })}
+                </View>}
+                <View style={styles.actionRow}>
+                  <View style={styles.flex}><GameButton label="Reroll Offers · 2" compact icon="refresh" variant="secondary" disabled={run.capital < 2} onPress={() => update(r => rerollEmpireShop(r))} /></View>
+                  <View style={styles.flex}><GameButton label="Next Quarter" compact icon="arrow-forward" onPress={() => { update(nextEmpireQuarter); setShopPanel('offers'); }} /></View>
                 </View>
               </GameCard>
             )}
@@ -232,6 +268,10 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   flex: { flex: 1 },
   offer: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  shopPanel: { marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.cardBorder },
+  departmentChip: { backgroundColor: Colors.elevated, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: Colors.cardBorder },
+  departmentChipActive: { borderColor: Colors.primary },
+  departmentChipText: { color: Colors.textPrimary, fontSize: 11, textTransform: 'capitalize' },
   advisor: { borderBottomWidth: 1, borderBottomColor: Colors.cardBorder, paddingVertical: 7 },
   rule: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
   comboMulti: { color: Colors.primary, fontWeight: '800', fontSize: 14 },
