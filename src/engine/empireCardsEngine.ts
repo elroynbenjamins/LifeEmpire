@@ -57,7 +57,7 @@ export const EMPIRE_ADVISORS: Advisor[] = [
   { id: 'family', name: 'Family Holdings', description: '×1.5 for Diversified Empire.', rarity: 'rare' },
   { id: 'tax', name: 'Tax Specialist', description: '+4 Run Capital after each quarter.', rarity: 'common' },
   { id: 'logistics', name: 'Logistics Expert', description: '+30 base points with Sales + Operations.', rarity: 'common' },
-  { id: 'digital', name: 'Digital Pioneer', description: '+25 base points with Innovation + Sales.', rarity: 'common' },
+  { id: 'digital', name: 'Digital Pioneer', description: '+25 base with Sales + Innovation; +45 with 3+ Innovation.', rarity: 'common' },
   { id: 'mergers', name: 'M&A Attorney', description: '×1.65 for a Joint Venture.', rarity: 'uncommon' },
   { id: 'trainer', name: 'Corporate Trainer', description: '+5 base points for every card played.', rarity: 'common' },
   { id: 'crisis', name: 'Crisis Consultant', description: 'Ignores boss card penalties; +45 base points during boss quarters.', rarity: 'rare' },
@@ -211,6 +211,7 @@ export function previewEmpireHand(run: EmpireRun, indices: number[]): ScorePrevi
   if (has('lean') && counts.operations >= 2) base += 55;
   if (has('logistics') && counts.sales && counts.operations) base += 30;
   if (has('digital') && counts.innovation && counts.sales) base += 25;
+  if (has('digital') && counts.innovation >= 3) base += 45;
   if (has('franchise') && counts.sales === 2) base += 15;
   if (has('trainer')) base += cards.length * 5;
   if (has('crisis') && boss) base += 45;
@@ -232,7 +233,7 @@ export function previewEmpireHand(run: EmpireRun, indices: number[]): ScorePrevi
     || (id === 'lab' && counts.sales > 0 && counts.innovation > 0)
     || (id === 'family' && combo?.id === 'diversified')
     || (id === 'logistics' && counts.sales > 0 && counts.operations > 0)
-    || (id === 'digital' && counts.innovation > 0 && counts.sales > 0)
+    || (id === 'digital' && (counts.innovation >= 3 || (counts.innovation > 0 && counts.sales > 0)))
     || (id === 'mergers' && combo?.id === 'venture')
     || (id === 'trainer')
     || (id === 'crisis' && boss !== null)
