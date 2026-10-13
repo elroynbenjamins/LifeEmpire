@@ -387,7 +387,7 @@ export default function EmpireCardsScreen() {
                   </View>
                 </View>;
               })}
-            </GameCard>
+            </GameCard>}
             <View style={styles.actionRow}>
               <View style={styles.flex}><GameButton label="Combination Guide" icon="book-outline" compact variant="secondary" onPress={() => setShowGuide(!showGuide)} /></View>
               <View style={styles.flex}><GameButton label="Restart Run" icon="refresh-outline" compact variant="ghost" onPress={restart} /></View>
