@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,10 @@ import GameCard from '../src/components/GameCard';
 import EmpireCardTile from '../src/components/EmpireCardTile';
 import { EmpirePhaseReveal, EmpireScorePulse, useEmpireReducedMotion } from '../src/components/EmpireMotion';
 import { Colors } from '../src/theme/colors';
+import {
+  getEmpireAdvisorIcon, EMPIRE_ADVISOR_RARITY_COLORS,
+  isEmpireCardBossAffected,
+} from '../src/theme/empireCardsVisuals';
 import useGameStore from '../src/store/gameStore';
 import {
   EMPIRE_ADVISORS, EMPIRE_BOSSES, EMPIRE_CARDS, EMPIRE_COMBOS, EMPIRE_QUARTERS, EMPIRE_DIFFICULTIES, EmpireDifficulty, EmpireChallengeId,
@@ -27,13 +31,12 @@ const CARD_MAP = Object.fromEntries(EMPIRE_CARDS.map(c => [c.id, c]));
 const ADVISOR_MAP = Object.fromEntries(EMPIRE_ADVISORS.map(a => [a.id, a]));
 const COMBO_MAP = Object.fromEntries(EMPIRE_COMBOS.map(c => [c.id, c]));
 const DEPARTMENT_ICONS: Record<string, string> = { sales: '📣', operations: '⚙️', finance: '🏦', innovation: '💡' };
-const DEPARTMENT_COLORS: Record<string, string> = {
-  sales: Colors.info, operations: Colors.primary, finance: Colors.warning, innovation: Colors.premium,
-};
 
 export default function EmpireCardsScreen() {
   const router = useRouter();
   const reduceMotion = useEmpireReducedMotion();
+  const { width: viewportWidth } = useWindowDimensions();
+  const handColumns: 3 | 4 = viewportWidth < 380 ? 3 : 4;
   const activeSlot = useGameStore(s => s.activeSlot ?? 0);
   const storageKey = 'life-empire-cards:v1:slot:' + activeSlot;
   const medalsKey = 'life-empire-cards-medals:v1:slot:' + activeSlot;
@@ -46,6 +49,7 @@ export default function EmpireCardsScreen() {
   const [medalsTab, setMedalsTab] = useState<'achievements' | 'challenges'>('achievements');
   const [recentMedal, setRecentMedal] = useState<string | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
+  const [hintMode, setHintMode] = useState<'play' | 'discard' | null>(null);
   const [mode, setMode] = useState<'play' | 'discard'>('play');
   const [showGuide, setShowGuide] = useState(false);
   const [startDifficulty, setStartDifficulty] = useState<EmpireDifficulty>('standard');
@@ -61,6 +65,7 @@ export default function EmpireCardsScreen() {
     medalsRef.current = emptyEmpireMedals();
     setMedals(medalsRef.current);
     setSelected([]);
+    setHintMode(null);
     setReplacementAdvisor(null);
     setRecentMedal(null);
     // Wait for both files before permitting writes, especially on save-slot changes.
@@ -125,15 +130,18 @@ export default function EmpireCardsScreen() {
       if (next !== previous) commitRun(next);
     }
     setSelected([]);
+    setHintMode(null);
     setMode('play');
   };
   const beginRun = (difficulty: EmpireDifficulty, challengeId?: EmpireChallengeId) => {
     commitRun(createEmpireRun(Date.now() >>> 0, difficulty, challengeId));
     setSelected([]);
+    setHintMode(null);
     setMode('play');
     setMedalsOpen(false);
   };
   const select = (index: number) => {
+    setHintMode(null);
     setSelected(current => current.includes(index)
       ? current.filter(i => i !== index)
       : current.length < 4 ? [...current, index] : current);
@@ -232,6 +240,10 @@ export default function EmpireCardsScreen() {
                         key={index + ':' + id}
                         card={card}
                         selected={selected.includes(index)}
+                        suggested={hintMode === 'play' && selected.includes(index)}
+                        discardSuggested={hintMode === 'discard' && selected.includes(index)}
+                        bossAffected={isEmpireCardBossAffected(card, boss, run.advisors.includes('crisis'))}
+                        columns={handColumns}
                         reduceMotion={reduceMotion}
                         onPress={() => select(index)}
                       />
@@ -254,19 +266,25 @@ export default function EmpireCardsScreen() {
                   {mode === 'play' ? (
                     <>
                       <View style={styles.flex}><GameButton label="Play Hand" compact icon="play" disabled={!selected.length} onPress={() => update(r => playEmpireHand(r, selected))} /></View>
-                      <View style={styles.flex}><GameButton label="Discard Mode" compact variant="secondary" icon="refresh-outline" disabled={run.discardsLeft === 0} onPress={() => { setSelected([]); setMode('discard'); }} /></View>
+                      <View style={styles.flex}><GameButton label="Discard Mode" compact variant="secondary" icon="refresh-outline" disabled={run.discardsLeft === 0} onPress={() => { setSelected([]); setHintMode(null); setMode('discard'); }} /></View>
                     </>
                   ) : (
                     <>
                       <View style={styles.flex}><GameButton label="Replace Cards" compact disabled={!selected.length} onPress={() => update(r => discardEmpireCards(r, selected))} /></View>
-                      <View style={styles.flex}><GameButton label="Cancel" compact variant="secondary" onPress={() => { setSelected([]); setMode('play'); }} /></View>
+                      <View style={styles.flex}><GameButton label="Cancel" compact variant="secondary" onPress={() => { setSelected([]); setHintMode(null); setMode('play'); }} /></View>
                     </>
                   )}
                 </View>
                 <View style={styles.actionRow}>
-                  <View style={styles.flex}><GameButton label={mode === 'discard' ? "Suggest Discard" : "Suggest Best Hand"} icon="bulb-outline" variant="ghost" compact onPress={() => setSelected(mode === 'discard' ? suggestEmpireDiscard(run) : suggestEmpireHand(run))} /></View>
-                  <View style={styles.flex}><GameButton label="Clear Selection" icon="close-outline" variant="ghost" compact disabled={!selected.length} onPress={() => setSelected([])} /></View>
+                  <View style={styles.flex}><GameButton label={mode === 'discard' ? "Suggest Discard" : "Suggest Best Hand"} icon="bulb-outline" variant="ghost" compact onPress={() => { setSelected(mode === 'discard' ? suggestEmpireDiscard(run) : suggestEmpireHand(run)); setHintMode(mode); }} /></View>
+                  <View style={styles.flex}><GameButton label="Clear Selection" icon="close-outline" variant="ghost" compact disabled={!selected.length} onPress={() => { setSelected([]); setHintMode(null); }} /></View>
                 </View>
+                <Text style={styles.note}>
+                  {hintMode === 'play' ? '★ Suggested cards are selected. You still choose when to play.' :
+                    hintMode === 'discard' ? '↻ Dashed cards are suggested for replacement. Nothing is discarded automatically.' :
+                    'CORE 20–24 · GROWTH 26–30 · FLAGSHIP 32–34 points. These are visual tiers, not rarity.'}
+                  {boss && !run.advisors.includes('crisis') ? ' ⚠ marks cards weakened by this boss.' : ''}
+                </Text>
                 <Text style={styles.note}>Play up to {run.quarter >= 5 ? 4 : 3} hands to reach the target. Discard up to 4 cards per discard action. No timer.</Text>
               </GameCard>
             )}
@@ -287,10 +305,13 @@ export default function EmpireCardsScreen() {
                   const description = offer.kind === 'advisor' ? ADVISOR_MAP[offer.id]?.description : offer.kind === 'upgrade' ? 'Increase this combination multiplier by +0.25.' : 'Add one copy of this card to your deck.';
                   const rarity = offer.kind === 'advisor' ? ADVISOR_MAP[offer.id]?.rarity : null;
                   return <View key={index} style={styles.offer}>
+                    {offer.kind === 'advisor' && <View style={[styles.advisorMedallion, { borderColor: EMPIRE_ADVISOR_RARITY_COLORS[rarity ?? 'common'] }]}>
+                      <Ionicons name={getEmpireAdvisorIcon(offer.id)} color={EMPIRE_ADVISOR_RARITY_COLORS[rarity ?? 'common']} size={20} />
+                    </View>}
                     <View style={styles.flex}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <Text style={styles.title}>{title}</Text>
-                        {rarity && <Text style={[styles.rarityLabel, { color: rarity === 'rare' ? Colors.premium : rarity === 'uncommon' ? Colors.info : Colors.textMuted }]}>{rarity.toUpperCase()}</Text>}
+                        {rarity && <Text style={[styles.rarityLabel, { color: EMPIRE_ADVISOR_RARITY_COLORS[rarity] }]}>{rarity.toUpperCase()}</Text>}
                       </View>
                       <Text style={styles.note}>{description}</Text>
                     </View>
@@ -348,9 +369,25 @@ export default function EmpireCardsScreen() {
             )}
 
             </EmpirePhaseReveal>
-            {run.advisors.length > 0 && <GameCard title="Active CEO Advisors" compact>
-              {run.advisors.map(id => <View key={id} style={styles.advisor}><Text style={styles.title}>{ADVISOR_MAP[id]?.name ?? id}</Text><Text style={styles.note}>{ADVISOR_MAP[id]?.description}</Text></View>)}
-            </GameCard>}
+            {run.advisors.length > 0 && <GameCard title="Active CEO Advisors" compact
+              titleAccessory={<Text style={styles.muted}>{run.advisors.length}/4</Text>}>
+              {run.advisors.map(id => {
+                const advisor = ADVISOR_MAP[id];
+                const accent = EMPIRE_ADVISOR_RARITY_COLORS[advisor?.rarity ?? 'common'];
+                return <View key={id} style={styles.advisor}>
+                  <View style={[styles.advisorMedallion, { borderColor: accent }]}>
+                    <Ionicons name={getEmpireAdvisorIcon(id)} color={accent} size={19} />
+                  </View>
+                  <View style={styles.flex}>
+                    <View style={styles.advisorHeading}>
+                      <Text style={styles.title}>{advisor?.name ?? id}</Text>
+                      <Text style={[styles.rarityLabel, { color: accent }]}>{advisor?.rarity?.toUpperCase() ?? ''}</Text>
+                    </View>
+                    <Text style={styles.note}>{advisor?.description}</Text>
+                  </View>
+                </View>;
+              })}
+            </GameCard>
             <View style={styles.actionRow}>
               <View style={styles.flex}><GameButton label="Combination Guide" icon="book-outline" compact variant="secondary" onPress={() => setShowGuide(!showGuide)} /></View>
               <View style={styles.flex}><GameButton label="Restart Run" icon="refresh-outline" compact variant="ghost" onPress={restart} /></View>
@@ -439,7 +476,9 @@ const styles = StyleSheet.create({
   departmentChip: { backgroundColor: Colors.elevated, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: Colors.cardBorder },
   departmentChipActive: { borderColor: Colors.primary },
   departmentChipText: { color: Colors.textPrimary, fontSize: 11, textTransform: 'capitalize' },
-  advisor: { borderBottomWidth: 1, borderBottomColor: Colors.cardBorder, paddingVertical: 7 },
+  advisor: { flexDirection: 'row', alignItems: 'center', gap: 9, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder, paddingVertical: 7 },
+  advisorMedallion: { height: 36, width: 36, borderWidth: 1, borderRadius: 8, backgroundColor: Colors.elevated, alignItems: 'center', justifyContent: 'center' },
+  advisorHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   rule: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
   comboMulti: { color: Colors.primary, fontWeight: '800', fontSize: 14 },
   factRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12, marginTop: 8 },
