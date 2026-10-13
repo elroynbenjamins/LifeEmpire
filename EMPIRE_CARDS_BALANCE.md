@@ -1,6 +1,6 @@
 # Empire Cards — balance baseline (2026-10-13)
 
-This document records the initial release balance and implementation goals for **Empire Cards**, an optional, static (no-animation) roguelite activity inside Life Empire.
+This document records the initial release balance and implementation goals for **Empire Cards**, an optional, low-motion roguelite activity inside Life Empire.
 
 ## Fixed scope
 
@@ -24,11 +24,11 @@ This document records the initial release balance and implementation goals for *
 | 7 Holding Formation | 1,950 | 4 | 3 | No |
 | 8 Global Business Empire | 2,100 | 4 | 3 | Yes |
 
-The Inflation boss raises its quarter target by 20%. The other bosses primarily alter card values or cap the base combination multiplier. Crisis Consultant protects boss card values and adds +20 base points during boss quarters, but does not waive the Inflation target increase.
+The Inflation boss raises its quarter target by 20%. The other bosses primarily alter card values or cap the base combination multiplier. Crisis Consultant protects boss card values and adds +45 base points during boss quarters, but does not waive the Inflation target increase.
 
 ## Shops and card decisions
 
-- Quarter rewards: 7 Run Capital plus 2 per unused hand; Tax Specialist adds another 2.
+- Quarter rewards: 7 Run Capital plus 2 per unused hand; Tax Specialist adds another 4.
 - Two distinct Advisor offers, one random combination upgrade, one improved card offer.
 - Advisor slots stay limited to four. When slots are full, a player may explicitly choose which existing Advisor to replace before purchasing another one.
 - Optional combination-specific training (level 1–4) costs 7/9/11/13 Capital and increases that combo's multiplier by 0.25 per level.
@@ -43,12 +43,12 @@ The Inflation boss raises its quarter target by 20%. The other bosses primarily 
 | --- | ---: | ---: | ---: |
 | Quarter 1 | 120 | 120 | 120 |
 | Quarter 2 | 118 | 120 | 120 |
-| Quarter 3 | 63 | 120 | 120 |
-| Quarter 4 | 25 | 118 | 120 |
-| Quarter 5 | 13 | 118 | 120 |
-| Quarter 6 | 3 | 92 | 112 |
-| Quarter 7 | 0 | 51 | 105 |
-| Quarter 8 | 0 | 26 | 73 |
+| Quarter 3 | 74 | 120 | 120 |
+| Quarter 4 | 38 | 120 | 120 |
+| Quarter 5 | 23 | 120 | 120 |
+| Quarter 6 | 4 | 104 | 113 |
+| Quarter 7 | 0 | 77 | 112 |
+| Quarter 8 | 0 | 32 | 88 |
 
 Scripted results are **not human player win rates**. These are regression benchmarks from `src/engine/__tests__/empireCardsBalance.test.ts` and should be rerun after any scoring, target, shop, or deck-size changes.
 
@@ -90,9 +90,45 @@ A controlled seven-card hand with four intended department cards was scored usin
 | Innovation | 770 | 559 |
 | Diversified | 935 | 488 |
 
-A small mobile UI improvement displays which Advisors contributed to the currently selected hand and flags Venture Capitalist's no-Finance penalty. The change does not add animations or new saved-state requirements.
+The mobile UI identifies which Advisors contribute to a selected hand and warns when Venture Capitalist imposes its no-Finance penalty. Later UI refinements add small optional animations but no saved-state changes.
 
 The *intermediate* first Advisor reduction made quarter eight excessively hard (3/120 guided wins). The finale was therefore recalibrated to 1,950 in quarter seven and 2,100 in quarter eight, preserving a difficult but achievable late game with multiple conditional scoring approaches.
+
+## Motion & deck-archetype refinement (2026-10-13)
+
+Lightweight animations are limited to three short, built-in React Native `Animated` effects: a selected card lifts 5px and grows by 2.5% (120–145ms), the points total pulses after a played hand (~230ms), and transitions between play, shop and quarters fade/shift slightly (185ms). They animate only opacity/transform using the native driver; no additional imagery, video, timers, or heavy animation libraries. OS reduced-motion accessibility settings disable the effects, while color/border/selection states remain visible.
+
+### Why specialized combos were changed
+
+The first full-run archetype benchmark exposed a steep advantage for Finance and Diversified decks (around 64% final wins each) compared with Sales, Operations, and Innovation (11–16% each). This was largely due to rare combo patterns earning *less* than the easier Diversified hand.
+
+Combo base multipliers were raised for the rarer patterns, without changing the 32-card/15-Advisor/8-combo/8-quarter/6-boss content contract:
+
+- Industry Dominance (4 matching): ×3.40
+- Specialization (3 matching): ×2.70
+- Supply Chain / Startup Accelerator / Market Expansion: ×2.85 each
+- Joint Venture: ×2.55
+- Diversified Empire remains ×2.65
+
+A Sales specialist bot now trains the more attainable **Specialization** combo instead of focusing solely on the rare four-of-a-kind.
+
+### Full-run comparison after refinements
+
+The `src/engine/__tests__/empireCardsArchetypes.test.ts` test uses 100 fixed seeds *for each of five shop policies*. These policies use best-hand selection, purchase targeted Advisors, train one desired combination, and sometimes retire low cards. This is a model-based comparative benchmark, **not a measurement of human players**, and it does not yet model tactical discard choices.
+
+| Archetype | Wins out of 100 | Average quarters cleared |
+| --- | ---: | ---: |
+| Sales | 35 | 6.76 |
+| Operations | 34 | 6.68 |
+| Finance | 68 | 7.25 |
+| Innovation | 37 | 6.70 |
+| Diversified | 64 | 7.28 |
+
+All five strategies are now viable, though Finance and Diversified remain easier in these particular scripted policies. Future passes should test conditional discard decisions, varied shop purchasing, and genuine player data before trying to equalize win rates further.
+
+### Overall seeded benchmark, updated
+
+After raising specialized multipliers, the existing 120-seed comparison reached **32/120 guided final victories** and **88/120 strategic final victories**; the casual first-four bot still reached **0/120**. This corresponds to ~27% guided and ~73% strategic completions, but these are purely simulated outcomes.
 
 ## Future work
 
