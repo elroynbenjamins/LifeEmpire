@@ -5,7 +5,7 @@ import {
 
 type Build = 'sales' | 'operations' | 'finance' | 'innovation' | 'diversified';
 const styles: Record<Build, { combo: string; advisors: string[]; focus: string | null }> = {
-  sales: { combo: 'dominance', focus: 'sales', advisors: ['franchise', 'brand', 'trainer', 'logistics', 'lab', 'venture', 'operator', 'tax'] },
+  sales: { combo: 'specialization', focus: 'sales', advisors: ['franchise', 'brand', 'trainer', 'logistics', 'lab', 'venture', 'operator', 'tax'] },
   operations: { combo: 'supply', focus: 'operations', advisors: ['lean', 'operator', 'logistics', 'trainer', 'venture', 'cfo', 'tax'] },
   finance: { combo: 'venture', focus: 'finance', advisors: ['venture', 'cfo', 'mergers', 'trainer', 'family', 'operator', 'tax'] },
   innovation: { combo: 'startup', focus: 'innovation', advisors: ['rnd', 'digital', 'lab', 'trainer', 'venture', 'brand', 'tax'] },
