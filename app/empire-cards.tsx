@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,11 +12,16 @@ import { EmpirePhaseReveal, EmpireScorePulse, useEmpireReducedMotion } from '../
 import { Colors } from '../src/theme/colors';
 import useGameStore from '../src/store/gameStore';
 import {
-  EMPIRE_ADVISORS, EMPIRE_BOSSES, EMPIRE_CARDS, EMPIRE_COMBOS, EMPIRE_QUARTERS, EMPIRE_DIFFICULTIES, EmpireDifficulty,
+  EMPIRE_ADVISORS, EMPIRE_BOSSES, EMPIRE_CARDS, EMPIRE_COMBOS, EMPIRE_QUARTERS, EMPIRE_DIFFICULTIES, EmpireDifficulty, EmpireChallengeId,
   EmpireRun, buyEmpireOffer, createEmpireRun, currentBoss, discardEmpireCards,
   isEmpireRun, nextEmpireQuarter, playEmpireHand, previewEmpireHand,
   quarterTarget, rerollEmpireShop, retireEmpireCard, suggestEmpireHand, suggestEmpireDiscard, trainEmpireCombo,
-} from '../src/engine/empireCardsEngine';
+ } from '../src/engine/empireCardsEngine';
+import {
+  EMPIRE_ACHIEVEMENTS, EMPIRE_CHALLENGES, EmpireMedalProfile,
+  emptyEmpireMedals, readEmpireMedals, applyEmpireMedalProgress,
+  reconcileEmpireMedals, activeEmpireChallenge, empireChallengeProgress,
+} from '../src/engine/empireCardsMedals';
 
 const CARD_MAP = Object.fromEntries(EMPIRE_CARDS.map(c => [c.id, c]));
 const ADVISOR_MAP = Object.fromEntries(EMPIRE_ADVISORS.map(a => [a.id, a]));
@@ -31,44 +36,102 @@ export default function EmpireCardsScreen() {
   const reduceMotion = useEmpireReducedMotion();
   const activeSlot = useGameStore(s => s.activeSlot ?? 0);
   const storageKey = 'life-empire-cards:v1:slot:' + activeSlot;
+  const medalsKey = 'life-empire-cards-medals:v1:slot:' + activeSlot;
   const [readyKey, setReadyKey] = useState<string | null>(null);
   const [run, setRun] = useState<EmpireRun | null>(null);
+  const runRef = useRef<EmpireRun | null>(null);
+  const [medals, setMedals] = useState<EmpireMedalProfile>(emptyEmpireMedals);
+  const medalsRef = useRef<EmpireMedalProfile>(emptyEmpireMedals());
+  const [medalsOpen, setMedalsOpen] = useState(false);
+  const [medalsTab, setMedalsTab] = useState<'achievements' | 'challenges'>('achievements');
+  const [recentMedal, setRecentMedal] = useState<string | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [mode, setMode] = useState<'play' | 'discard'>('play');
   const [showGuide, setShowGuide] = useState(false);
   const [startDifficulty, setStartDifficulty] = useState<EmpireDifficulty>('standard');
+  const [startChallenge, setStartChallenge] = useState<EmpireChallengeId | null>(null);
   const [shopPanel, setShopPanel] = useState<'offers' | 'training' | 'retire'>('offers');
   const [retireDepartment, setRetireDepartment] = useState<'sales' | 'operations' | 'finance' | 'innovation'>('sales');
   const [replacementAdvisor, setReplacementAdvisor] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
     setReadyKey(null);
+    runRef.current = null;
     setRun(null);
+    medalsRef.current = emptyEmpireMedals();
+    setMedals(medalsRef.current);
     setSelected([]);
     setReplacementAdvisor(null);
-    AsyncStorage.getItem(storageKey).then(value => {
-      if (!active) return;
-      try {
-        const parsed: unknown = value ? JSON.parse(value) : null;
-        setRun(isEmpireRun(parsed) ? parsed : null);
-      } catch {
-        setRun(null);
-      }
-      setReadyKey(storageKey);
-    }).catch(() => { if (active) setReadyKey(storageKey); });
+    setRecentMedal(null);
+    // Wait for both files before permitting writes, especially on save-slot changes.
+    Promise.all([AsyncStorage.getItem(storageKey), AsyncStorage.getItem(medalsKey)])
+      .then(([rawRun, rawMedals]) => {
+        if (!active) return;
+        let savedRun: EmpireRun | null = null;
+        let savedMedals = emptyEmpireMedals();
+        try {
+          const parsed: unknown = rawRun ? JSON.parse(rawRun) : null;
+          savedRun = isEmpireRun(parsed) ? parsed : null;
+        } catch { /* Preserve badges even if a run is corrupt. */ }
+        try {
+          savedMedals = readEmpireMedals(rawMedals ? JSON.parse(rawMedals) : null);
+        } catch { /* Invalid badge JSON cannot block game startup. */ }
+        savedMedals = reconcileEmpireMedals(savedMedals, savedRun);
+        runRef.current = savedRun;
+        medalsRef.current = savedMedals;
+        setRun(savedRun);
+        setMedals(savedMedals);
+        setReadyKey(storageKey);
+      })
+      .catch(() => { if (active) setReadyKey(storageKey); });
     return () => { active = false; };
-  }, [storageKey]);
+  }, [storageKey, medalsKey]);
   useEffect(() => {
     // Never write the previous save slot's run into a newly selected slot.
     if (readyKey !== storageKey) return;
     const pending = run ? AsyncStorage.setItem(storageKey, JSON.stringify(run)) : AsyncStorage.removeItem(storageKey);
     void pending.catch(() => {});
   }, [readyKey, run, storageKey]);
+  useEffect(() => {
+    if (readyKey !== storageKey) return;
+    void AsyncStorage.setItem(medalsKey, JSON.stringify(medals)).catch(() => {});
+  }, [readyKey, medals, medalsKey, storageKey]);
 
+  const commitRun = (next: EmpireRun | null) => {
+    const previous = runRef.current;
+    runRef.current = next;
+    setRun(next);
+    if (previous && next) {
+      const updated = applyEmpireMedalProgress(medalsRef.current, previous, next);
+      if (updated !== medalsRef.current) {
+        const newAchievement = updated.unlocked.find(id => !medalsRef.current.unlocked.includes(id));
+        const newChallenge = updated.completedChallenges.find(id => !medalsRef.current.completedChallenges.includes(id));
+        medalsRef.current = updated;
+        setMedals(updated);
+        const award = EMPIRE_ACHIEVEMENTS.find(m => m.id === newAchievement)
+          ?? EMPIRE_CHALLENGES.find(c => c.id === newChallenge);
+        setRecentMedal(award ? '🏅 ' + award.name + ' medal unlocked' : null);
+      } else {
+        setRecentMedal(null);
+      }
+    } else {
+      setRecentMedal(null);
+    }
+  };
   const update = (transform: (value: EmpireRun) => EmpireRun) => {
-    setRun(previous => previous ? transform(previous) : previous);
+    const previous = runRef.current;
+    if (previous) {
+      const next = transform(previous);
+      if (next !== previous) commitRun(next);
+    }
     setSelected([]);
     setMode('play');
+  };
+  const beginRun = (difficulty: EmpireDifficulty, challengeId?: EmpireChallengeId) => {
+    commitRun(createEmpireRun(Date.now() >>> 0, difficulty, challengeId));
+    setSelected([]);
+    setMode('play');
+    setMedalsOpen(false);
   };
   const select = (index: number) => {
     setSelected(current => current.includes(index)
@@ -79,14 +142,15 @@ export default function EmpireCardsScreen() {
     if (run && run.phase !== 'won' && run.phase !== 'lost') {
       Alert.alert('Abandon current run?', 'Run-only progress and Advisors will be lost.', [
         { text: 'Keep playing', style: 'cancel' },
-        { text: 'Start over', style: 'destructive', onPress: () => { setRun(createEmpireRun(Date.now() >>> 0, run?.difficulty ?? startDifficulty)); setSelected([]); setMode('play'); } },
+        { text: 'Start over', style: 'destructive', onPress: () => { beginRun(run?.difficulty ?? startDifficulty, run?.challengeId ?? startChallenge ?? undefined); } },
       ]);
-    } else { setRun(createEmpireRun(Date.now() >>> 0, run?.difficulty ?? startDifficulty)); setSelected([]); setMode('play'); }
+    } else { beginRun(run?.difficulty ?? startDifficulty, run?.challengeId ?? startChallenge ?? undefined); }
   };
   const boss = run ? currentBoss(run) : null;
   const preview = run ? previewEmpireHand(run, selected) : null;
   const target = run ? quarterTarget(run) : 0;
   const quarter = run ? EMPIRE_QUARTERS[run.quarter - 1] : null;
+  const activeChallenge = run ? activeEmpireChallenge(run) : null;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -112,7 +176,23 @@ export default function EmpireCardsScreen() {
                   </Pressable>
                 ))}
               </View>
-              <GameButton label="Start Empire Cards" icon="play" onPress={() => setRun(createEmpireRun(Date.now() >>> 0, startDifficulty))} />
+              <Text style={[styles.title, { marginTop: 8 }]}>Optional run challenge</Text>
+              <View style={styles.challengeChoices}>
+                <Pressable accessibilityRole="button" accessibilityState={{ selected: startChallenge === null }}
+                  style={[styles.challengeChip, startChallenge === null && styles.challengeChipActive]}
+                  onPress={() => setStartChallenge(null)}>
+                  <Text style={styles.challengeChoiceText}>None</Text>
+                </Pressable>
+                {EMPIRE_CHALLENGES.map(c => (
+                  <Pressable key={c.id} accessibilityRole="button" accessibilityState={{ selected: startChallenge === c.id }}
+                    style={[styles.challengeChip, startChallenge === c.id && styles.challengeChipActive]}
+                    onPress={() => setStartChallenge(c.id)}>
+                    <Text style={styles.challengeChoiceText}>{c.icon} {c.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.note}>{EMPIRE_CHALLENGES.find(c => c.id === startChallenge)?.description ?? 'No extra objective. You can still earn permanent Empire Cards achievements.'}</Text>
+              <GameButton label="Start Empire Cards" icon="play" onPress={() => beginRun(startDifficulty, startChallenge ?? undefined)} />
             </GameCard>
             <GameButton label="How combinations work" icon="help-circle-outline" variant="secondary" onPress={() => setShowGuide(!showGuide)} />
           </>
@@ -124,6 +204,11 @@ export default function EmpireCardsScreen() {
               <View style={styles.stat}><Text style={styles.statLabel}>ADVISORS</Text><Text style={styles.statValue}>{run.advisors.length}/4</Text></View>
             </View>
             <Text style={styles.difficultyContext}>{EMPIRE_DIFFICULTIES[run.difficulty ?? 'standard']?.label ?? 'Standard'} difficulty · Targets adjust by difficulty only</Text>
+            {activeChallenge && <View style={styles.challengeStatus}>
+              <Text style={styles.challengeStatusTitle}>{activeChallenge.icon} {activeChallenge.name} {run.challengeCompleted ? '✓' : ''}</Text>
+              <Text style={styles.note}>{run.challengeCompleted ? 'Challenge medal earned for this run' : activeChallenge.description + ' · ' + empireChallengeProgress(run) + '/' + activeChallenge.target}</Text>
+            </View>}
+            {recentMedal && <Text style={styles.medalToast}>{recentMedal}</Text>}
             <EmpirePhaseReveal phaseKey={run.quarter + ':' + run.phase} reduceMotion={reduceMotion}>
             <GameCard title={quarter?.name ?? 'Empire Cards'} eyebrow={boss ? 'BOSS QUARTER' : 'CURRENT QUARTER'} accentColor={boss ? Colors.warning : Colors.business}>
               {boss && <View style={styles.boss}><Text style={styles.title}>{'⚠️ ' + boss.name}</Text><Text style={styles.description}>{boss.description}</Text></View>}
@@ -252,7 +337,13 @@ export default function EmpireCardsScreen() {
               <GameCard title={run.phase === 'won' ? '🏆 Business Empire Completed' : 'Run Finished'} accentColor={run.phase === 'won' ? Colors.primary : Colors.warning}>
                 <Text style={styles.description}>Reached quarter {run.quarter} of 8 · Played {run.totalHandsPlayed} hands.</Text>
                 <Text style={styles.note}>This is an optional independent activity. No main-game resources were added or deducted.</Text>
-                <GameButton label="Start New Run" icon="refresh" onPress={restart} />
+                {activeChallenge && <Text style={styles.description}>{activeChallenge.icon} {activeChallenge.name}: {run.challengeCompleted ? 'Medal earned' : 'Not completed'}</Text>}
+                <GameButton label="Play Again" icon="refresh" onPress={restart} />
+                <GameButton label="Choose New Challenge" variant="secondary" compact onPress={() => {
+                  setStartDifficulty(run.difficulty ?? 'standard');
+                  setStartChallenge(run.challengeId ?? null);
+                  commitRun(null);
+                }} />
               </GameCard>
             )}
 
@@ -266,6 +357,39 @@ export default function EmpireCardsScreen() {
             </View>
           </>
         )}
+
+        <GameCard title="Medal Cabinet" eyebrow="EMPIRE CARDS ONLY" compact
+          titleAccessory={<Text style={styles.muted}>{medals.unlocked.length}/{EMPIRE_ACHIEVEMENTS.length} 🏅</Text>}>
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: medalsOpen }}
+            onPress={() => setMedalsOpen(!medalsOpen)} style={styles.medalHeader}>
+            <Text style={styles.description}>{medals.completedChallenges.length}/{EMPIRE_CHALLENGES.length} challenges completed · cosmetic medals only</Text>
+            <Ionicons name={medalsOpen ? 'chevron-up' : 'chevron-down'} color={Colors.textSecondary} size={18} />
+          </Pressable>
+          {medalsOpen && <>
+            <View style={styles.medalTabs}>
+              <Pressable accessibilityRole="button" onPress={() => setMedalsTab('achievements')}
+                style={[styles.medalTab, medalsTab === 'achievements' && styles.medalTabActive]}>
+                <Text style={styles.medalTabText}>Achievements</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => setMedalsTab('challenges')}
+                style={[styles.medalTab, medalsTab === 'challenges' && styles.medalTabActive]}>
+                <Text style={styles.medalTabText}>Challenges</Text>
+              </Pressable>
+            </View>
+            {(medalsTab === 'achievements' ? EMPIRE_ACHIEVEMENTS : EMPIRE_CHALLENGES).map(item => {
+              const complete = medalsTab === 'achievements'
+                ? medals.unlocked.includes(item.id)
+                : medals.completedChallenges.includes(item.id as EmpireChallengeId);
+              return <View key={item.id} style={styles.medalRow}>
+                <Text style={[styles.medalIcon, !complete && { opacity: 0.35 }]}>{complete ? item.icon : '🔒'}</Text>
+                <View style={styles.flex}>
+                  <Text style={styles.title}>{item.name} {complete ? '✓' : ''}</Text>
+                  <Text style={styles.note}>{item.description}</Text>
+                </View>
+              </View>;
+            })}
+          </>}
+        </GameCard>
 
         {showGuide && <GameCard title="All 8 Business Combinations" eyebrow="RULEBOOK" compact>
           {EMPIRE_COMBOS.map(combo => <View key={combo.id} style={styles.rule}><View style={styles.flex}><Text style={styles.title}>{combo.name}</Text><Text style={styles.note}>{combo.description}</Text></View><Text style={styles.comboMulti}>×{combo.multiplier.toFixed(2)}</Text></View>)}
@@ -320,4 +444,18 @@ const styles = StyleSheet.create({
   comboMulti: { color: Colors.primary, fontWeight: '800', fontSize: 14 },
   factRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12, marginTop: 8 },
   fact: { backgroundColor: Colors.elevated, color: Colors.textSecondary, paddingVertical: 6, paddingHorizontal: 9, borderRadius: 7, fontSize: 11 },
+  challengeChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  challengeChip: { backgroundColor: Colors.elevated, borderWidth: 1, borderColor: Colors.cardBorder, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 8 },
+  challengeChipActive: { borderColor: Colors.primary },
+  challengeChoiceText: { fontSize: 11, fontWeight: '600', color: Colors.textPrimary },
+  challengeStatus: { backgroundColor: Colors.elevated, borderRadius: 8, padding: 9, marginBottom: 10 },
+  challengeStatusTitle: { color: Colors.textPrimary, fontSize: 12, fontWeight: '700' },
+  medalToast: { color: Colors.primary, fontSize: 12, fontWeight: '700', marginBottom: 10 },
+  medalHeader: { flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'space-between' },
+  medalTabs: { flexDirection: 'row', gap: 6, marginVertical: 10 },
+  medalTab: { flex: 1, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: 8, alignItems: 'center', padding: 9 },
+  medalTabActive: { borderColor: Colors.primary, backgroundColor: Colors.elevated },
+  medalTabText: { color: Colors.textPrimary, fontWeight: '700', fontSize: 12 },
+  medalRow: { flexDirection: 'row', gap: 9, paddingVertical: 7, borderTopWidth: 1, borderTopColor: Colors.cardBorder, alignItems: 'center' },
+  medalIcon: { fontSize: 17 },
 });
