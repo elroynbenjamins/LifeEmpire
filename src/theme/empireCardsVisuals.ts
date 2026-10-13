@@ -3,7 +3,7 @@
  * High-contrast labels and unique icons keep the 4 departments distinguishable without color.
  */
 import type React from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import type { Department, EmpireCard, Boss } from '../engine/empireCardsEngine';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
