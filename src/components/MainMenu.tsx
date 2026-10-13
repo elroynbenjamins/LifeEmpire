@@ -1,10 +1,12 @@
 import React from 'react';
 import { Linking, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import useGameStore from '../store/gameStore';
 import { Colors } from '../theme/colors';
 
 export default function MainMenu() {
+  const router = useRouter();
   const visible = useGameStore((state) => state.showMainMenu);
   const activeSlot = useGameStore((state) => state.activeSlot ?? 0);
   const slotMeta = useGameStore((state) => state.slotMeta ?? {});
@@ -13,6 +15,11 @@ export default function MainMenu() {
   const beginNewGame = useGameStore((state) => state.beginNewGame);
   const activeSave = slotMeta[activeSlot];
   const hasSaves = Object.values(slotMeta).some(Boolean);
+  const openStandaloneCards = () => {
+    // Empire Cards owns its own storage; starting it never creates a Life Empire save.
+    useGameStore.setState({ showMainMenu: false });
+    router.push('/empire-cards?mode=standalone&from=main-menu');
+  };
 
   return (
     <Modal visible={visible} animationType="fade">
@@ -33,6 +40,14 @@ export default function MainMenu() {
             <Pressable disabled={!activeSave} style={[styles.primaryButton, !activeSave && styles.disabledButton]} onPress={continueGame}>
               <Ionicons name="play" size={21} color={Colors.white} />
               <Text style={styles.primaryText}>Continue</Text>
+            </Pressable>
+            <Pressable style={styles.secondaryButton} onPress={openStandaloneCards}
+              accessibilityRole="button" accessibilityLabel="Play Empire Cards standalone without a save">
+              <Ionicons name="layers-outline" size={21} color={Colors.business} />
+              <View style={styles.buttonCopy}>
+                <Text style={styles.secondaryText}>Empire Cards</Text>
+                <Text style={styles.miniNote}>Play standalone · No save required</Text>
+              </View>
             </Pressable>
             <Pressable style={styles.secondaryButton} onPress={openSlotPicker}>
               <Ionicons name="folder-open-outline" size={21} color={Colors.primary} />
@@ -68,5 +83,7 @@ const styles = StyleSheet.create({
   primaryText: { color: Colors.white, fontSize: 17, fontWeight: '800' },
   secondaryButton: { minHeight: 54, borderRadius: 14, borderWidth: 1, borderColor: Colors.primary, backgroundColor: Colors.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   secondaryText: { color: Colors.textPrimary, fontSize: 16, fontWeight: '700' },
+  buttonCopy: { alignItems: 'center' },
+  miniNote: { color: Colors.textMuted, fontSize: 11, marginTop: 1 },
   discordButton: { minHeight: 54, borderRadius: 14, backgroundColor: '#5865F2', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
 });
