@@ -177,6 +177,31 @@ describe('Empire Cards - fixed content contract', () => {
     expect(funded.advisors).toEqual(oldAdvisors);
   });
 
+  it('balances narrow Advisors against financial, innovation and quarter bonuses', () => {
+    const noFinance = withHand(['sales-1','sales-2','operations-1','innovation-1'], { advisors: ['venture'] });
+    const negative = previewEmpireHand(noFinance, [0,1,2,3]);
+    const baseline = previewEmpireHand({ ...noFinance, advisors: [] }, [0,1,2,3]);
+    expect(negative.points).toBeLessThan(baseline.points);
+    expect(negative.advisorWarning).toContain('no Finance');
+    expect(negative.activeAdvisorIds).toContain('venture');
+    const withFinance = withHand(['sales-1','finance-1','operations-1','innovation-1'], { advisors: ['venture'] });
+    expect(previewEmpireHand(withFinance,[0,1,2,3]).points)
+      .toBeGreaterThan(previewEmpireHand({ ...withFinance, advisors: [] },[0,1,2,3]).points);
+    const specialist = withHand(['innovation-5','innovation-6','innovation-7','innovation-8'], { advisors: ['digital'] });
+    expect(previewEmpireHand(specialist,[0,1,2,3]).base).toBe(
+      previewEmpireHand({ ...specialist, advisors: [] },[0,1,2,3]).base + 45
+    );
+    const twoSales = withHand(['sales-1','sales-2','finance-1','operations-1'], { advisors: ['franchise'] });
+    expect(previewEmpireHand(twoSales,[0,1,2,3]).base).toBe(
+      previewEmpireHand({ ...twoSales, advisors: [] },[0,1,2,3]).base + 15
+    );
+    const run = createEmpireRun(127);
+    const withTax = playEmpireHand({ ...run, advisors: ['tax'], score: quarterTarget(run) - 1 }, [0]);
+    const withoutTax = playEmpireHand({ ...run, score: quarterTarget(run) - 1 }, [0]);
+    expect(withTax.phase).toBe('shop');
+    expect(withTax.capital - withoutTax.capital).toBe(4);
+  });
+
   it('rejects invalid actions', () => {
     const run = createEmpireRun(568);
     expect(playEmpireHand(run, [])).toBe(run);
