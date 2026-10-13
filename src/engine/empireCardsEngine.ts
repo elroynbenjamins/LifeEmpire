@@ -64,13 +64,13 @@ export const EMPIRE_ADVISORS: Advisor[] = [
 ];
 
 export const EMPIRE_COMBOS: Combo[] = [
-  { id: 'dominance', name: 'Industry Dominance', multiplier: 3.25, description: 'Four cards from one department.' },
+  { id: 'dominance', name: 'Industry Dominance', multiplier: 3.4, description: 'Four cards from one department.' },
   { id: 'diversified', name: 'Diversified Empire', multiplier: 2.65, description: 'One card from each department.' },
-  { id: 'venture', name: 'Joint Venture', multiplier: 2.45, description: 'Two cards from each of two departments.' },
-  { id: 'specialization', name: 'Specialization', multiplier: 2.15, description: 'Three cards from one department.' },
-  { id: 'supply', name: 'Supply Chain', multiplier: 2.4, description: '2 Operations + Sales + Finance.' },
-  { id: 'startup', name: 'Startup Accelerator', multiplier: 2.35, description: '2 Innovation + Sales + Finance.' },
-  { id: 'expansion', name: 'Market Expansion', multiplier: 2.35, description: '2 Sales + Operations + Innovation.' },
+  { id: 'venture', name: 'Joint Venture', multiplier: 2.55, description: 'Two cards from each of two departments.' },
+  { id: 'specialization', name: 'Specialization', multiplier: 2.7, description: 'Three cards from one department.' },
+  { id: 'supply', name: 'Supply Chain', multiplier: 2.85, description: '2 Operations + Sales + Finance.' },
+  { id: 'startup', name: 'Startup Accelerator', multiplier: 2.85, description: '2 Innovation + Sales + Finance.' },
+  { id: 'expansion', name: 'Market Expansion', multiplier: 2.85, description: '2 Sales + Operations + Innovation.' },
   { id: 'partnership', name: 'Department Partnership', multiplier: 1.6, description: 'At least two cards of one department.' },
 ];
 
