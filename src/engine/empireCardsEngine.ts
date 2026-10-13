@@ -212,6 +212,27 @@ export function previewEmpireHand(run: EmpireRun, indices: number[]): ScorePrevi
   if (has('mergers') && combo?.id === 'venture') multiplier *= 1.4;
   return { points: Math.round(base * multiplier), base: Math.round(base), multiplier, combo, boss };
 }
+/** Choose the strongest currently playable hand. A suggestion, never an automatic spend. */
+export function suggestEmpireHand(run: EmpireRun): number[] {
+  if (run.phase !== 'play') return [];
+  const length = run.hand.length;
+  let best: number[] = [];
+  let bestScore = -1;
+  for (let a = 0; a < length; a++) {
+    for (let b = a + 1; b < length; b++) {
+      for (let c = b + 1; c < length; c++) {
+        for (let d = c + 1; d < length; d++) {
+          const indices = [a, b, c, d];
+          const score = previewEmpireHand(run, indices).points;
+          if (score > bestScore) { bestScore = score; best = indices; }
+        }
+      }
+    }
+  }
+  // Fallback when an old save contains fewer than four cards.
+  if (best.length === 0) return run.hand.map((_, i) => i).slice(0, 4);
+  return best;
+}
 export function playEmpireHand(run: EmpireRun, indices: number[]): EmpireRun {
   if (run.phase !== 'play' || run.handsLeft <= 0 || indices.length < 1 || indices.length > 4) return run;
   if (new Set(indices).size !== indices.length || indices.some(i => !Number.isInteger(i) || i < 0 || i >= run.hand.length)) return run;
