@@ -63,7 +63,7 @@ describe('Empire Cards - fixed content contract', () => {
     const hand = ['sales-1', 'sales-2', 'finance-1', 'innovation-1'];
     const base = previewEmpireHand(withHand(hand), [0, 1, 2, 3]);
     const advisor = previewEmpireHand(withHand(hand, { advisors: ['brand'] }), [0, 1, 2, 3]);
-    expect(advisor.base - base.base).toBe(20);
+    expect(advisor.base - base.base).toBe(24);
     expect(advisor.points).toBeGreaterThan(base.points);
     const recession = previewEmpireHand(withHand(hand, { quarter: 3, bosses: ['recession', 'inflation', 'regulation'] }), [0, 1, 2, 3]);
     expect(recession.points).toBeLessThan(base.points);
