@@ -124,12 +124,12 @@ function makeOffers(run: EmpireRun): EmpireRun {
   const available = EMPIRE_ADVISORS.filter(a => !run.advisors.includes(a.id));
   const offers: Offer[] = [];
   // Two distinct Advisor choices reduce bad-luck shops without increasing the four-slot cap.
-  if (run.advisors.length < 4) {
-    const [pool, nextSeed] = shuffled(available, seed);
-    seed = nextSeed;
-    for (const advisor of pool.slice(0, 2)) {
-      offers.push({ kind: 'advisor', id: advisor.id, cost: advisor.rarity === 'rare' ? 9 : advisor.rarity === 'uncommon' ? 7 : 5 });
-    }
+  // Keep Advisor offers available in late shops so players can pivot their build.
+  // A full Advisor roster requires explicitly choosing an existing one to replace.
+  const [pool, nextSeed] = shuffled(available, seed);
+  seed = nextSeed;
+  for (const advisor of pool.slice(0, 2)) {
+    offers.push({ kind: 'advisor', id: advisor.id, cost: advisor.rarity === 'rare' ? 9 : advisor.rarity === 'uncommon' ? 7 : 5 });
   }
   seed = randomStep(seed);
   offers.push({ kind: 'upgrade', id: EMPIRE_COMBOS[Math.floor(seed / 4294967296 * EMPIRE_COMBOS.length)].id, cost: 6 });
@@ -262,13 +262,18 @@ export function discardEmpireCards(run: EmpireRun, indices: number[]): EmpireRun
   const remaining = run.hand.filter((_, i) => !indices.includes(i));
   return pull({ ...run, hand: remaining, discarded: [...run.discarded, ...consumed], discardsLeft: run.discardsLeft - 1, lastMessage: 'Cards replaced.' }, consumed.length);
 }
-export function buyEmpireOffer(run: EmpireRun, index: number): EmpireRun {
+export function buyEmpireOffer(run: EmpireRun, index: number, replaceAdvisorId?: string): EmpireRun {
   if (run.phase !== 'shop') return run;
   const offer = run.offers[index];
   if (!offer || run.capital < offer.cost) return run;
-  if (offer.kind === 'advisor' && (run.advisors.length >= 4 || run.advisors.includes(offer.id))) return run;
+  if (offer.kind === 'advisor') {
+    if (run.advisors.includes(offer.id)) return run;
+    if (run.advisors.length >= 4 && (!replaceAdvisorId || !run.advisors.includes(replaceAdvisorId))) return run;
+  }
   const next: EmpireRun = { ...run, capital: run.capital - offer.cost, offers: run.offers.filter((_, i) => i !== index) };
-  if (offer.kind === 'advisor') next.advisors = [...run.advisors, offer.id];
+  if (offer.kind === 'advisor') next.advisors = run.advisors.length >= 4
+    ? run.advisors.map(id => id === replaceAdvisorId ? offer.id : id)
+    : [...run.advisors, offer.id];
   if (offer.kind === 'upgrade') next.upgrades = { ...run.upgrades, [offer.id]: (run.upgrades[offer.id] ?? 0) + 1 };
   if (offer.kind === 'card') next.deck = [...run.deck, offer.id];
   next.lastMessage = 'Purchased ' + (offer.kind === 'advisor' ? EMPIRE_ADVISORS.find(a => a.id === offer.id)?.name : offer.kind === 'upgrade' ? EMPIRE_COMBOS.find(c => c.id === offer.id)?.name : CARD_BY_ID[offer.id]?.name) + '.';
