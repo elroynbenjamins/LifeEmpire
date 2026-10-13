@@ -383,7 +383,7 @@ export function isEmpireRun(value: unknown): value is EmpireRun {
   if (!value || typeof value !== 'object') return false;
   const r = value as Partial<EmpireRun>;
   return r.version === 1
-    && (r.difficulty === undefined || r.difficulty in EMPIRE_DIFFICULTIES)
+    && (r.difficulty === undefined || r.difficulty === 'standard' || r.difficulty === 'advanced' || r.difficulty === 'tycoon')
     && Number.isInteger(r.quarter) && (r.quarter ?? 0) >= 1 && (r.quarter ?? 0) <= 8
     && ['play', 'shop', 'won', 'lost'].includes(r.phase as string)
     && Number.isInteger(r.seed) && typeof r.capital === 'number' && typeof r.score === 'number'
