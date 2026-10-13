@@ -59,6 +59,12 @@ describe('Empire Cards seeded balance benchmark', () => {
     expect(strategic[1]).toBeGreaterThan(basic[1]);
     expect(guided[2]).toBeGreaterThan(basic[2]);
     expect(strategic[3]).toBeGreaterThan(0);
+    // Guard against future tuning that makes the finale either trivial or
+    // effectively impossible for a player using the in-game recommendation.
+    expect(guided[7]).toBeGreaterThanOrEqual(15);
+    expect(strategic[7]).toBeGreaterThanOrEqual(50);
+    expect(strategic[7]).toBeGreaterThan(guided[7]);
+    expect(basic[7]).toBeLessThan(guided[7]);
   });
   it('does not make the early quarter unattainable with an ordinary shuffled hand', () => {
     const example = createEmpireRun(927);
