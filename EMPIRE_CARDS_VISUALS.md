@@ -34,6 +34,24 @@ The accent appears on a slim top strip, icon, point-badge outline and selection 
 - The live score preview continues to display actual scores, combination multipliers and Advisor contributions for the cards the player manually selects
 - Advisor shop offers and equipped Advisor summary now use distinct small glyphs and rarity accent colors
 
+## Quick tutorial and contextual help
+
+The first time a player starts an Empire Cards run on a Life Empire save slot, a **five-step, non-modal and skippable** tutorial appears. A compact guide stays below the screen header so the underlying cards and controls remain usable. An accent outline highlights the relevant UI area.
+
+1. Quarter score and target.
+2. Selecting up to four cards.
+3. Live combination and score preview.
+4. Playing versus discarding.
+5. Optional, non-automatic Strategy Hint.
+
+One additional tip is shown **on first reaching the Investment Shop**, and another **upon first encountering a boss quarter**. Each includes Got it and Don't show again. Skipping the initial five-step walkthrough still permits those later tips; Don't show again permanently disables automatic tutorial prompts for that save slot. The player can use **How to Play / Replay Tutorial** manually, including after disabling automatic help. Manual replay cycles through all seven explanations even if the player is not currently in the related phase.
+
+Tutorial completion is saved independently under `life-empire-cards-tutorial:v1:slot:<slot>`; it does not change run progress, score, card choices, main game currency, medals or balance. Missing/legacy preferences default to incomplete without changing existing runs.
+
+An inline note underneath the first hand also reminds the player to try selecting cards and watch the preview update. The full Combination Guide remains optional.
+
+Implementation: `src/engine/empireCardsTutorial.ts`, `src/components/EmpireCardsCoach.tsx`, `app/empire-cards.tsx`. Regression coverage: `src/engine/__tests__/empireCardsTutorial.test.ts`.
+
 ## Future art pass
 
 If a full custom art pass is ever desired, retain the existing top-strip/point-badge/title/footer anatomy. Replace only the icon region with consistent mini-illustrations, starting with four sample cards. Do not generate 32 independent art pieces before validating readability on actual 360–390px devices.
