@@ -46,9 +46,9 @@ The Inflation boss raises its quarter target by 20%. The other bosses primarily 
 | Quarter 3 | 62 | 120 | 120 |
 | Quarter 4 | 30 | 118 | 120 |
 | Quarter 5 | 22 | 118 | 119 |
-| Quarter 6 | 8 | 86 | 109 |
-| Quarter 7 | 1 | 55 | 92 |
-| Quarter 8 | 0 | 24 | 69 |
+| Quarter 6 | 4 | 89 | 105 |
+| Quarter 7 | 2 | 55 | 96 |
+| Quarter 8 | 0 | 24 | 66 |
 
 Scripted results are **not human player win rates**. These are regression benchmarks from `src/engine/__tests__/empireCardsBalance.test.ts` and should be rerun after any scoring, target, shop, or deck-size changes.
 
