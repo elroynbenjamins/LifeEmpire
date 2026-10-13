@@ -352,7 +352,7 @@ export default function EmpireCardsScreen() {
                   )}
                 </View>
                 <View style={[styles.actionRow, guideStep === 4 && styles.tutorialFocus]}>
-                  <View style={styles.flex}><GameButton label={showStrategyHint ? 'Hide Hint' : 'Strategy Hint' icon="bulb-outline" variant="ghost" compact onPress={() => setShowStrategyHint(!showStrategyHint)} /></View>
+                  <View style={styles.flex}><GameButton label={showStrategyHint ? 'Hide Hint' : 'Strategy Hint'} icon="bulb-outline" variant="ghost" compact onPress={() => setShowStrategyHint(!showStrategyHint)} /></View>
                   <View style={styles.flex}><GameButton label="Clear Selection" icon="close-outline" variant="ghost" compact disabled={!selected.length} onPress={() => setSelected([])} /></View>
                 </View>
                 {showStrategyHint && strategyHint && <View style={styles.strategyHint}>
