@@ -61,9 +61,9 @@ export const EMPIRE_ADVISORS: Advisor[] = [
   { id: 'rnd', name: 'R&D Director', description: '+12 base points per Innovation card.', rarity: 'common' },
   { id: 'franchise', name: 'Franchise Network', description: '+15 base points with 2 Sales; ×1.7 with 3+ Sales.', rarity: 'uncommon' },
   { id: 'lean', name: 'Lean Operations', description: '+55 base points with 2+ Operations cards.', rarity: 'uncommon' },
-  { id: 'venture', name: 'Venture Capitalist', description: '×1.35 with Finance; otherwise ×0.9.', rarity: 'rare' },
+  { id: 'venture', name: 'Venture Capitalist', description: '×1.30 with Finance; otherwise ×0.9.', rarity: 'rare' },
   { id: 'lab', name: 'Research Laboratory', description: '×1.3 with Sales + Innovation.', rarity: 'uncommon' },
-  { id: 'family', name: 'Family Holdings', description: '×1.5 for Diversified Empire.', rarity: 'rare' },
+  { id: 'family', name: 'Family Holdings', description: '×1.45 for Diversified Empire.', rarity: 'rare' },
   { id: 'tax', name: 'Tax Specialist', description: '+4 Run Capital after each quarter.', rarity: 'common' },
   { id: 'logistics', name: 'Logistics Expert', description: '+30 base points with Sales + Operations.', rarity: 'common' },
   { id: 'digital', name: 'Digital Pioneer', description: '+25 base with Sales + Innovation; +45 with 3+ Innovation.', rarity: 'common' },
@@ -74,12 +74,12 @@ export const EMPIRE_ADVISORS: Advisor[] = [
 
 export const EMPIRE_COMBOS: Combo[] = [
   { id: 'dominance', name: 'Industry Dominance', multiplier: 3.4, description: 'Four cards from one department.' },
-  { id: 'diversified', name: 'Diversified Empire', multiplier: 2.65, description: 'One card from each department.' },
-  { id: 'venture', name: 'Joint Venture', multiplier: 2.55, description: 'Two cards from each of two departments.' },
-  { id: 'specialization', name: 'Specialization', multiplier: 2.7, description: 'Three cards from one department.' },
-  { id: 'supply', name: 'Supply Chain', multiplier: 2.85, description: '2 Operations + Sales + Finance.' },
-  { id: 'startup', name: 'Startup Accelerator', multiplier: 2.85, description: '2 Innovation + Sales + Finance.' },
-  { id: 'expansion', name: 'Market Expansion', multiplier: 2.85, description: '2 Sales + Operations + Innovation.' },
+  { id: 'diversified', name: 'Diversified Empire', multiplier: 2.55, description: 'One card from each department.' },
+  { id: 'venture', name: 'Joint Venture', multiplier: 2.45, description: 'Two cards from each of two departments.' },
+  { id: 'specialization', name: 'Specialization', multiplier: 2.8, description: 'Three cards from one department.' },
+  { id: 'supply', name: 'Supply Chain', multiplier: 2.95, description: '2 Operations + Sales + Finance.' },
+  { id: 'startup', name: 'Startup Accelerator', multiplier: 2.95, description: '2 Innovation + Sales + Finance.' },
+  { id: 'expansion', name: 'Market Expansion', multiplier: 2.95, description: '2 Sales + Operations + Innovation.' },
   { id: 'partnership', name: 'Department Partnership', multiplier: 1.6, description: 'At least two cards of one department.' },
 ];
 
@@ -232,9 +232,9 @@ export function previewEmpireHand(run: EmpireRun, indices: number[]): ScorePrevi
   // Antitrust caps combination upgrades, not independently purchased advisor effects.
   if (boss?.id === 'anti_trust' && !protectedFromBoss) multiplier = Math.min(2.25, multiplier);
   if (has('franchise') && counts.sales >= 3) multiplier *= 1.7;
-  if (has('venture')) multiplier *= counts.finance ? 1.35 : 0.9;
+  if (has('venture')) multiplier *= counts.finance ? 1.3 : 0.9;
   if (has('lab') && counts.sales && counts.innovation) multiplier *= 1.3;
-  if (has('family') && combo?.id === 'diversified') multiplier *= 1.5;
+  if (has('family') && combo?.id === 'diversified') multiplier *= 1.45;
   if (has('mergers') && combo?.id === 'venture') multiplier *= 1.65;
   const activeAdvisorIds = run.advisors.filter(id => cards.length > 0 && (
     (id === 'brand' && counts.sales > 0)
