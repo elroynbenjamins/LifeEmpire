@@ -11,6 +11,8 @@ export interface Quarter { name: string; target: number }
 export type Offer = { kind: 'advisor' | 'upgrade' | 'card'; id: string; cost: number };
 export type EmpirePhase = 'play' | 'shop' | 'won' | 'lost';
 export type EmpireDifficulty = 'standard' | 'advanced' | 'tycoon';
+/** Challenges are entirely optional, and only award in-mode medals. */
+export type EmpireChallengeId = 'venture_trio' | 'diversified_four' | 'clean_boss' | 'no_discards';
 export const EMPIRE_DIFFICULTIES: Record<EmpireDifficulty, { label: string; multiplier: number; description: string }> = {
   standard: { label: 'Standard', multiplier: 1, description: 'Balanced eight-quarter run' },
   advanced: { label: 'Advanced', multiplier: 1.12, description: '+12% score targets' },
@@ -21,6 +23,12 @@ export interface EmpireRun {
   version: 1;
   /** Missing on older saves; defaults to Standard without migration. */
   difficulty?: EmpireDifficulty;
+  /** All challenge fields are optional to preserve existing version 1 saves. */
+  challengeId?: EmpireChallengeId;
+  challengeProgress?: number;
+  challengeCompleted?: boolean;
+  quarterUsedDiscard?: boolean;
+  usedAnyDiscard?: boolean;
   seed: number;
   quarter: number;
   phase: EmpirePhase;
@@ -152,13 +160,19 @@ function makeOffers(run: EmpireRun): EmpireRun {
   offers.push({ kind: 'card', id: potential[Math.floor(seed / 4294967296 * potential.length)].id, cost: 4 });
   return { ...run, offers, seed };
 }
-export function createEmpireRun(seed = Date.now() >>> 0, difficulty: EmpireDifficulty = 'standard'): EmpireRun {
+export function createEmpireRun(
+  seed = Date.now() >>> 0,
+  difficulty: EmpireDifficulty = 'standard',
+  challengeId?: EmpireChallengeId,
+): EmpireRun {
   const normalized = (seed >>> 0) || 1;
   let deck: string[], newSeed: number;
   [deck, newSeed] = shuffled(EMPIRE_CARDS.map(c => c.id), normalized);
   const [bosses, bossSeed] = shuffled(EMPIRE_BOSSES.map(b => b.id), newSeed);
   return pull({
-    version: 1, difficulty, seed: bossSeed, quarter: 1, phase: 'play', score: 0,
+    version: 1, difficulty, challengeId, challengeProgress: 0, challengeCompleted: false,
+    quarterUsedDiscard: false, usedAnyDiscard: false,
+    seed: bossSeed, quarter: 1, phase: 'play', score: 0,
     handsLeft: 3, discardsLeft: 2, capital: 0, deck, hand: [], discarded: [],
     advisors: [], upgrades: {}, bosses: bosses.slice(0, 3),
     offers: [], lastMessage: 'Select up to 4 cards, then Play Hand.', lastHandScore: 0, totalHandsPlayed: 0, retiredCards: 0, lastComboId: null,
@@ -300,8 +314,27 @@ export function playEmpireHand(run: EmpireRun, indices: number[]): EmpireRun {
     lastHandScore: handScore.points, lastComboId: handScore.combo?.id ?? null,
     lastMessage: (handScore.combo?.name ?? 'Basic Play') + ': +' + handScore.points.toLocaleString('en-US') + ' points.',
   };
+  // Record only a real, successfully played hand. No rewards affect the main game.
+  if (!next.challengeCompleted) {
+    const match = (run.challengeId === 'venture_trio' && handScore.combo?.id === 'venture')
+      || (run.challengeId === 'diversified_four' && handScore.combo?.id === 'diversified');
+    if (match) {
+      const progress = (run.challengeProgress ?? 0) + 1;
+      next = { ...next, challengeProgress: progress,
+        challengeCompleted: progress >= (run.challengeId === 'venture_trio' ? 3 : 4) };
+    }
+  }
   if (next.score >= quarterTarget(next)) {
-    if (next.quarter === EMPIRE_QUARTERS.length) return { ...next, phase: 'won', lastMessage: 'Empire completed! All eight quarters cleared.' };
+    if (!next.challengeCompleted && run.challengeId === 'clean_boss'
+      && currentBoss(run) && !run.quarterUsedDiscard) {
+      next = { ...next, challengeProgress: 1, challengeCompleted: true };
+    }
+    if (next.quarter === EMPIRE_QUARTERS.length) {
+      if (!next.challengeCompleted && run.challengeId === 'no_discards' && !run.usedAnyDiscard) {
+        next = { ...next, challengeProgress: 1, challengeCompleted: true };
+      }
+      return { ...next, phase: 'won', lastMessage: 'Empire completed! All eight quarters cleared.' };
+    }
     const reward = 7 + next.handsLeft * 2 + (next.advisors.includes('tax') ? 4 : 0);
     return makeOffers({ ...next, phase: 'shop', capital: next.capital + reward, lastMessage: 'Quarter cleared! +' + reward + ' Run Capital.' });
   }
@@ -314,7 +347,7 @@ export function discardEmpireCards(run: EmpireRun, indices: number[]): EmpireRun
   if (new Set(indices).size !== indices.length || indices.some(i => !Number.isInteger(i) || i < 0 || i >= run.hand.length)) return run;
   const consumed = run.hand.filter((_, i) => indices.includes(i));
   const remaining = run.hand.filter((_, i) => !indices.includes(i));
-  return pull({ ...run, hand: remaining, discarded: [...run.discarded, ...consumed], discardsLeft: run.discardsLeft - 1, lastMessage: 'Cards replaced.' }, consumed.length);
+  return pull({ ...run, hand: remaining, discarded: [...run.discarded, ...consumed], discardsLeft: run.discardsLeft - 1, quarterUsedDiscard: true, usedAnyDiscard: true, lastMessage: 'Cards replaced.' }, consumed.length);
 }
 export function buyEmpireOffer(run: EmpireRun, index: number, replaceAdvisorId?: string): EmpireRun {
   if (run.phase !== 'shop') return run;
@@ -375,7 +408,7 @@ export function nextEmpireQuarter(run: EmpireRun): EmpireRun {
   const next: EmpireRun = {
     ...run, quarter: run.quarter + 1, phase: 'play', score: 0,
     handsLeft: run.quarter + 1 >= 5 ? 4 : 3, discardsLeft: run.quarter + 1 >= 5 ? 3 : 2, seed, deck, hand: [], discarded: [], offers: [],
-    lastHandScore: 0, lastMessage: 'A new quarter begins. Select your cards.',
+    lastHandScore: 0, quarterUsedDiscard: false, lastMessage: 'A new quarter begins. Select your cards.',
   };
   return pull(next, 7);
 }
@@ -384,6 +417,9 @@ export function isEmpireRun(value: unknown): value is EmpireRun {
   const r = value as Partial<EmpireRun>;
   return r.version === 1
     && (r.difficulty === undefined || r.difficulty === 'standard' || r.difficulty === 'advanced' || r.difficulty === 'tycoon')
+    && (r.challengeId === undefined || ['venture_trio', 'diversified_four', 'clean_boss', 'no_discards'].includes(r.challengeId))
+    && (r.challengeProgress === undefined || (Number.isInteger(r.challengeProgress) && r.challengeProgress >= 0))
+    && (r.challengeCompleted === undefined || typeof r.challengeCompleted === 'boolean')
     && Number.isInteger(r.quarter) && (r.quarter ?? 0) >= 1 && (r.quarter ?? 0) <= 8
     && ['play', 'shop', 'won', 'lost'].includes(r.phase as string)
     && Number.isInteger(r.seed) && typeof r.capital === 'number' && typeof r.score === 'number'
