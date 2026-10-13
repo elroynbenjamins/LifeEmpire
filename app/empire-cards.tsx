@@ -7,6 +7,8 @@ import { useRouter } from 'expo-router';
 import ScreenHeader from '../src/components/ScreenHeader';
 import GameButton from '../src/components/GameButton';
 import GameCard from '../src/components/GameCard';
+import EmpireCardTile from '../src/components/EmpireCardTile';
+import { EmpirePhaseReveal, EmpireScorePulse, useEmpireReducedMotion } from '../src/components/EmpireMotion';
 import { Colors } from '../src/theme/colors';
 import useGameStore from '../src/store/gameStore';
 import {
@@ -26,6 +28,7 @@ const DEPARTMENT_COLORS: Record<string, string> = {
 
 export default function EmpireCardsScreen() {
   const router = useRouter();
+  const reduceMotion = useEmpireReducedMotion();
   const activeSlot = useGameStore(s => s.activeSlot ?? 0);
   const storageKey = 'life-empire-cards:v1:slot:' + activeSlot;
   const [readyKey, setReadyKey] = useState<string | null>(null);
@@ -109,10 +112,11 @@ export default function EmpireCardsScreen() {
               <View style={styles.stat}><Text style={styles.statLabel}>CAPITAL</Text><Text style={styles.statValue}>{run.capital}</Text></View>
               <View style={styles.stat}><Text style={styles.statLabel}>ADVISORS</Text><Text style={styles.statValue}>{run.advisors.length}/4</Text></View>
             </View>
+            <EmpirePhaseReveal phaseKey={run.quarter + ':' + run.phase} reduceMotion={reduceMotion}>
             <GameCard title={quarter?.name ?? 'Empire Cards'} eyebrow={boss ? 'BOSS QUARTER' : 'CURRENT QUARTER'} accentColor={boss ? Colors.warning : Colors.business}>
               {boss && <View style={styles.boss}><Text style={styles.title}>{'⚠️ ' + boss.name}</Text><Text style={styles.description}>{boss.description}</Text></View>}
               <View style={styles.scoreRow}>
-                <View><Text style={styles.statLabel}>TOTAL POINTS</Text><Text style={styles.bigScore}>{run.score.toLocaleString('en-US')}</Text></View>
+                <View><Text style={styles.statLabel}>TOTAL POINTS</Text><EmpireScorePulse value={run.totalHandsPlayed} reduceMotion={reduceMotion}><Text style={styles.bigScore}>{run.score.toLocaleString('en-US')}</Text></EmpireScorePulse></View>
                 <View style={styles.alignRight}><Text style={styles.statLabel}>TARGET</Text><Text style={styles.bigScore}>{target.toLocaleString('en-US')}</Text></View>
               </View>
               <View style={styles.track}><View style={[styles.fill, { width: (Math.min(100, Math.round(run.score / Math.max(1, target) * 100)) + '%') as any }]} /></View>
@@ -124,19 +128,16 @@ export default function EmpireCardsScreen() {
               <GameCard title="Your hand" eyebrow="SELECT UP TO 4" titleAccessory={<Text style={styles.muted}>{run.hand.length} cards</Text>}>
                 <View style={styles.cards}>
                   {run.hand.map((id, index) => {
-                    const c = CARD_MAP[id];
-                    if (!c) return null;
-                    const active = selected.includes(index);
-                    return (
-                      <Pressable key={index} accessibilityRole="button" accessibilityLabel={c.name + ', ' + c.department + ', ' + c.points + ' points'} accessibilityState={{ selected: active }}
-                        style={[styles.card, { borderColor: active ? DEPARTMENT_COLORS[c.department] : Colors.cardBorder, borderWidth: active ? 2 : 1 }]} onPress={() => select(index)}>
-                        <Text style={styles.cardIcon}>{DEPARTMENT_ICONS[c.department]}</Text>
-                        <Text style={styles.cardTitle} numberOfLines={2}>{c.name}</Text>
-                        <Text style={styles.cardDept}>{c.department.toUpperCase()}</Text>
-                        <Text style={styles.cardPoints}>{c.points} pts</Text>
-                        {active && <Ionicons name="checkmark-circle" color={Colors.primary} size={15} />}
-                      </Pressable>
-                    );
+                    const card = CARD_MAP[id];
+                    return card ? (
+                      <EmpireCardTile
+                        key={index + ':' + id}
+                        card={card}
+                        selected={selected.includes(index)}
+                        reduceMotion={reduceMotion}
+                        onPress={() => select(index)}
+                      />
+                    ) : null;
                   })}
                 </View>
                 <View style={styles.preview}>
@@ -234,6 +235,7 @@ export default function EmpireCardsScreen() {
               </GameCard>
             )}
 
+            </EmpirePhaseReveal>
             {run.advisors.length > 0 && <GameCard title="Active CEO Advisors" compact>
               {run.advisors.map(id => <View key={id} style={styles.advisor}><Text style={styles.title}>{ADVISOR_MAP[id]?.name ?? id}</Text><Text style={styles.note}>{ADVISOR_MAP[id]?.description}</Text></View>)}
             </GameCard>}
