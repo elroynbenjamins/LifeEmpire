@@ -303,7 +303,19 @@ export default function RelationshipsScreen() {
                 </View>
               )}
 
-              <Text style={styles.subheading}>This Week</Text>
+              <View style={[styles.relationshipHealth, { borderColor: (partner.relationship ?? 70) < 35 ? Colors.negative + '55' : Colors.primary + '33' }]}>
+                <Ionicons name={(partner.relationship ?? 70) < 35 ? 'alert-circle-outline' : 'heart-circle-outline'}
+                  size={17} color={(partner.relationship ?? 70) < 35 ? Colors.negative : Colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.relationshipHealthTitle}>{(partner.relationship ?? 70) < 35 ? 'Relationship needs attention' : (partner.relationship ?? 70) >= 75 ? 'Strong & stable' : 'Growing together'}</Text>
+                  <Text style={styles.relationshipHealthText}>{(partner.relationship ?? 70) < 35
+                    ? 'Resolve meaningful disagreements or make time to rebuild trust.'
+                    : 'No weekly upkeep needed. Shared life and important choices shape your bond.'}</Text>
+                </View>
+              </View>
+
+              <Text style={styles.subheading}>Optional Time Together</Text>
+              <Text style={styles.relationshipActionHint}>One personal activity per week is available, but you never need to use it just to prevent routine relationship decay. Story decisions appear at most twice per 40 weeks.</Text>
               <View style={styles.actionGrid}>
                 <ActionTile icon="heart-outline" label="Spend Time" disabled={actionUsed} onPress={spendTime} />
                 <ActionTile icon="chatbubbles-outline" label="Discuss Finances" disabled={actionUsed} onPress={discussFinances} />
@@ -1155,6 +1167,10 @@ function ChildMilestoneTrack({ age }: { age: number }) {
 
 function memoryIcon(tag: string): React.ComponentProps<typeof Ionicons>['name'] {
   if (tag === 'world_travellers') return 'earth-outline';
+  if (tag === 'shared_goal' || tag === 'financial_trust') return 'wallet-outline';
+  if (tag === 'celebrated_success') return 'trophy-outline';
+  if (tag === 'built_a_home') return 'home-outline';
+  if (tag === 'made_time') return 'heart-outline';
   if (tag === 'career_first') return 'briefcase-outline';
   if (tag === 'showed_up_for_family') return 'heart-outline';
   if (tag === 'balanced_work_family') return 'git-compare-outline';
@@ -1316,6 +1332,10 @@ const styles = StyleSheet.create({
   financeTitle: { color: Colors.textPrimary, fontSize: 13, fontWeight: '800', marginBottom: 5 },
   agreementHelp: { color: Colors.textMuted, fontSize: 10, lineHeight: 15, marginTop: 7 },
   financeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 5 },
+  relationshipHealth: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: 9, padding: 9, marginTop: 11, backgroundColor: Colors.elevated },
+  relationshipHealthTitle: { color: Colors.textPrimary, fontSize: 12, fontWeight: '800' },
+  relationshipHealthText: { color: Colors.textSecondary, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  relationshipActionHint: { color: Colors.textMuted, fontSize: 10, lineHeight: 14, marginBottom: 8 },
   actionGrid: { flexDirection: 'row', gap: 8 },
   actionTile: { flex: 1, minHeight: 48, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 6 },
   actionTileText: { color: Colors.textPrimary, fontSize: 11, fontWeight: '700' },

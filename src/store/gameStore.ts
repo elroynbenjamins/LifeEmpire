@@ -598,6 +598,10 @@ const useGameStore = create<GameStore>((set, get) => ({
             developmentScore: child.developmentScore ?? 0,
             lastLifeArcEventAge: child.lastLifeArcEventAge ?? 0,
           })),
+          relationshipEventWeeks: saved.relationshipState?.relationshipEventWeeks
+            ?? (saved.relationshipState?.lastRelationshipEventWeek ? [saved.relationshipState.lastRelationshipEventWeek] : []),
+          relationshipEventWeeks: saved.relationshipState?.relationshipEventWeeks
+            ?? (saved.relationshipState?.lastRelationshipEventWeek ? [saved.relationshipState.lastRelationshipEventWeek] : []),
           recentRelationshipEventIds: saved.relationshipState?.recentRelationshipEventIds ?? [],
           celebratedMilestones: saved.relationshipState?.celebratedMilestones ?? [],
           memories: saved.relationshipState?.memories ?? [],

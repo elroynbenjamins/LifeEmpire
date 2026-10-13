@@ -309,3 +309,51 @@ describe('relationship narrative systems', () => {
     expect(workChoice?.careerPerformanceDelta).toBeGreaterThan(0);
   });
 });
+
+import { canOfferRelationshipEvent, recentRelationshipEventWeeks } from '../relationshipEventPacing';
+
+describe('rare relationship events and passive stability', () => {
+  test('allows no more than two events in any rolling 40 weeks with a 16-week separation', () => {
+    const generated: number[] = [];
+    for (let week = 1; week <= 160; week++) {
+      const recent = recentRelationshipEventWeeks(generated, week);
+      if (canOfferRelationshipEvent(week, recent, generated.at(-1) ?? 0)) generated.push(week);
+      expect(recentRelationshipEventWeeks(generated, week).length).toBeLessThanOrEqual(2);
+    }
+    expect(generated.length).toBeGreaterThanOrEqual(5);
+    expect(generated.every((week, index) => index === 0 || week - generated[index - 1] >= 16)).toBe(true);
+  });
+
+  test('migrates legacy events into cooldown without inventing extra ones', () => {
+    expect(recentRelationshipEventWeeks(undefined, 55, 40)).toEqual([40]);
+    expect(canOfferRelationshipEvent(55, [40], 40)).toBe(false);
+    expect(canOfferRelationshipEvent(56, [40], 40)).toBe(true);
+    expect(recentRelationshipEventWeeks([1, 25, 55], 65)).toEqual([55]);
+  });
+
+  test('a stable cohabiting couple grows slowly without dates or weekly button presses', () => {
+    const currentPartner = partner({ stage: 'living_together', relationship: 75, weeksKnown: 45 });
+    let state: GameState = {
+      ...INITIAL_GAME_STATE,
+      relationshipModeEnabled: true,
+      relationshipState: {
+        ...INITIAL_RELATIONSHIP_STATE,
+        partnerId: currentPartner.id,
+        activeConnections: [currentPartner],
+      },
+    };
+    for (let globalWeek = 1; globalWeek <= 80; globalWeek++) {
+      state = { ...state, year: Math.floor((globalWeek - 1) / 20) + 1, week: ((globalWeek - 1) % 20) + 1 };
+      const tick = processRelationships(state);
+      state = { ...state, relationshipState: tick.state };
+      const current = tick.state.activeConnections.find(c => c.id === currentPartner.id);
+      expect(current?.relationship).toBeGreaterThanOrEqual(75);
+      expect((tick.state.relationshipEventWeeks ?? []).filter(w => w > globalWeek - 40 && w <= globalWeek).length).toBeLessThanOrEqual(2);
+      // An offered decision should be counted immediately even if left pending.
+      if (tick.state.pendingEvent && (tick.state.relationshipEventWeeks ?? []).length) {
+        expect(tick.state.relationshipEventWeeks?.at(-1)).toBeLessThanOrEqual(globalWeek);
+      }
+    }
+    expect(state.relationshipState.activeConnections[0].relationship).toBeGreaterThan(75);
+  });
+});

@@ -264,7 +264,12 @@ export type RelationshipMemoryTag =
   | 'balanced_work_family'
   | 'career_first'
   | 'supported_child_path'
-  | 'child_independence';
+  | 'child_independence'
+  | 'shared_goal'
+  | 'celebrated_success'
+  | 'built_a_home'
+  | 'made_time'
+  | 'financial_trust';
 
 export interface RelationshipMemory {
   id: string;
@@ -352,6 +357,8 @@ export interface RelationshipState {
   familySpendingWeeksRemaining: number;
   lastFamilyAttemptWeek: number;
   lastRelationshipEventWeek: number;
+  /** Weeks when a relationship event was offered, used to cap event pop-ups to two per rolling 40 weeks. */
+  relationshipEventWeeks?: number[];
   recentRelationshipEventIds: string[];
   celebratedMilestones?: string[];
   memories?: RelationshipMemory[];
@@ -391,6 +398,7 @@ export const INITIAL_RELATIONSHIP_STATE: RelationshipState = {
   familySpendingWeeksRemaining: 0,
   lastFamilyAttemptWeek: 0,
   lastRelationshipEventWeek: 0,
+  relationshipEventWeeks: [],
   recentRelationshipEventIds: [],
   celebratedMilestones: [],
   memories: [],

@@ -16,6 +16,7 @@ import housingData from '../data/housing.json';
 import { getNetWorth, getWeeklySalary, getWeeklyRent, getWeeklyUtilityCost, getWeeklyFoodCost } from './financeEngine';
 import { getCareerSalary } from './careerEngine';
 import { annualDeathChance } from './lifecycleEngine';
+import { canOfferRelationshipEvent, recentRelationshipEventWeeks } from './relationshipEventPacing';
 
 const FINANCIAL_STYLES = ['frugal', 'balanced', 'luxury'] as const;
 const RISK = ['cautious', 'balanced', 'risk_taking'] as const;
@@ -1157,7 +1158,7 @@ function createRelationshipEvent(
       title: 'Debt Concern',
       description: `${partner.name} is worried about how much personal debt the household is carrying.`,
       choices: [
-        { text: 'Talk through the repayment plan', relationship: 3 },
+        { text: 'Talk through the repayment plan', relationship: 4, memoryTag: 'financial_trust', memoryLabel: 'Faced a debt concern together', memorySentiment: 'positive' },
         { text: 'Promise to reduce risk', relationship: 5, happiness: 1, happinessDuration: 3 },
         { text: 'It is my money', relationship: -7 },
       ],
@@ -1207,8 +1208,8 @@ function createRelationshipEvent(
       title: 'Business Milestone',
       description: `${partner.name} wants to celebrate how much your business empire has grown.`,
       choices: [
-        { text: `Dinner together (€${Math.round(150 * inflation)})`, cost: Math.round(150 * inflation), relationship: 4, happiness: 4, happinessDuration: 3 },
-        { text: `Weekend away (€${Math.round(1200 * inflation)})`, cost: Math.round(1200 * inflation), relationship: 8, happiness: 8, happinessDuration: 4 },
+        { text: `Dinner together (€${Math.round(150 * inflation)})`, cost: Math.round(150 * inflation), relationship: 4, happiness: 4, happinessDuration: 3, memoryTag: 'celebrated_success', memoryLabel: 'Celebrated a business milestone together', memorySentiment: 'positive' },
+        { text: `Weekend away (€${Math.round(1200 * inflation)})`, cost: Math.round(1200 * inflation), relationship: 8, happiness: 8, happinessDuration: 4, memoryTag: 'celebrated_success', memoryLabel: 'Made time for each other after a business success', memorySentiment: 'positive' },
         { text: 'Keep working', relationship: -2 },
       ],
     });
@@ -1254,7 +1255,7 @@ function createRelationshipEvent(
       title: 'A New Home Together',
       description: `${partner.name} is excited about the move and wants to make the new place feel like home.`,
       choices: [
-        { text: `Buy a few things together (€${Math.round(500 * inflation)})`, cost: Math.round(500 * inflation), relationship: 5, happiness: 4, happinessDuration: 4 },
+        { text: `Buy a few things together (€${Math.round(500 * inflation)})`, cost: Math.round(500 * inflation), relationship: 5, happiness: 4, happinessDuration: 4, memoryTag: 'built_a_home', memoryLabel: 'Made a new home feel like ours', memorySentiment: 'positive' },
         { text: 'Enjoy the upgrade without extra spending', relationship: 2 },
       ],
     });
@@ -1370,7 +1371,7 @@ function createRelationshipEvent(
       title: 'Talking About the Future',
       description: `${partner.name} wants to spend an evening talking about where your life together is heading.`,
       choices: [
-        { text: 'Make time for the conversation', relationship: 4 },
+        { text: 'Make time for the conversation', relationship: 4, memoryTag: 'made_time', memoryLabel: 'Talked seriously about our future', memorySentiment: 'positive' },
         { text: 'Plan a nice evening', cost: Math.round(100 * inflation), relationship: 6, happiness: 3, happinessDuration: 3 },
         { text: 'Too busy right now', relationship: -3 },
       ],
@@ -2044,12 +2045,15 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
         ? `You and ${partner.name} are traveling together. Salary income is paused this week.`
         : null;
   let adjustedConnections = savingsConnections;
-  if (partner && gw - (current.personalActionWeek ?? 0) >= 8) {
-    relationshipChange = -2;
-    headline = `${partner.name} feels you've had little time together lately.`;
+  // An established bond is not a weekly upkeep meter. Shared household life can slowly
+  // improve a healthy relationship, while real conflicts and story choices may still hurt it.
+  if (partner && gw % 20 === 0
+    && (partner.stage === 'married' || partner.stage === 'living_together' || partner.isCohabiting)
+    && partner.relationship >= 45 && partner.relationship < 90) {
     adjustedConnections = savingsConnections.map((c) =>
-      c.id === partner.id ? { ...c, relationship: Math.max(0, (c.relationship ?? 70) - 2) } : c
+      c.id === partner.id ? { ...c, relationship: Math.min(90, (c.relationship ?? 70) + 1) } : c
     );
+    relationshipChange += 1;
   }
 
   const currentPartner = partner ? adjustedConnections.find((c) => c.id === partner.id) ?? partner : null;
@@ -2060,6 +2064,7 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
   }
 
   let relationshipGoalCompleted: string | null = null;
+  let relationshipMemories = current.memories ?? [];
   let sharedGoal = current.sharedGoal ?? null;
   if (sharedGoal && !sharedGoal.completed) {
     const goalState: GameState = {
@@ -2079,6 +2084,15 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
           item.id === partner.id ? { ...item, relationship: Math.min(100, (item.relationship ?? 70) + 5) } : item
         );
         relationshipChange += 5;
+        relationshipMemories = [...relationshipMemories, {
+          id: `shared_goal_${sharedGoal.type}_${gw}_${partner.id}`,
+          tag: 'shared_goal' as const,
+          label: `Reached a shared ${label} together`,
+          sentiment: 'positive' as const,
+          globalWeek: gw,
+          partnerId: partner.id,
+          sourceEventId: `shared_goal_${sharedGoal.type}`,
+        }];
       }
       timeline.push({ week: state.week, year: state.year, title: relationshipGoalCompleted });
       if (!headline) headline = relationshipGoalCompleted;
@@ -2089,98 +2103,81 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
   let pendingEvent = current.pendingEvent ?? null;
   let eventTitle: string | null = null;
   let lastRelationshipEventWeek = current.lastRelationshipEventWeek ?? 0;
+  // The same limit applies to normal events, work-family conflicts, and family milestones.
+  // A queued event uses its slot when generated, not when the player eventually responds.
+  let relationshipEventWeeks = recentRelationshipEventWeeks(
+    current.relationshipEventWeeks, gw, lastRelationshipEventWeek
+  );
   let lastWorkFamilyConflictWeek = current.lastWorkFamilyConflictWeek ?? 0;
 
-  if (!pendingEvent && !coupleTripActive && gw - lastRelationshipEventWeek >= 6) {
-    const milestoneEvent = createFamilyMilestoneEvent(
+  const due = !pendingEvent && !partnerDiedName && !coupleTripActive
+    && canOfferRelationshipEvent(gw, relationshipEventWeeks, lastRelationshipEventWeek)
+    && (!currentPartner || currentPartner.weeksKnown >= 8);
+  if (due) {
+    pendingEvent = createFamilyMilestoneEvent(
       { ...workingState, relationshipState: { ...workingState.relationshipState, activeConnections: adjustedConnections, children } },
-      currentPartner,
-      children,
+      currentPartner, children,
     );
-    if (milestoneEvent) {
-      pendingEvent = milestoneEvent;
-      eventTitle = milestoneEvent.title;
-      lastRelationshipEventWeek = gw;
+    if (!pendingEvent && partner && annualProgression
+      && (currentPartner?.relationship ?? partner.relationship) >= 40
+      && gw - lastWorkFamilyConflictWeek >= 40 && Math.random() < 0.55) {
+      pendingEvent = createWorkFamilyConflictEvent(
+        { ...workingState, relationshipState: { ...workingState.relationshipState, activeConnections: adjustedConnections, children } },
+        currentPartner ?? partner, children,
+      );
+      if (pendingEvent) lastWorkFamilyConflictWeek = gw;
     }
-  }
-
-  if (
-    partner &&
-    !pendingEvent &&
-    !coupleTripActive &&
-    annualProgression &&
-    (currentPartner?.relationship ?? partner.relationship) >= 40 &&
-    gw - lastWorkFamilyConflictWeek >= 40 &&
-    Math.random() < 0.55
-  ) {
-    const conflict = createWorkFamilyConflictEvent(
-      { ...workingState, relationshipState: { ...workingState.relationshipState, activeConnections: adjustedConnections, children } },
-      currentPartner ?? partner,
-      children,
-    );
-    if (conflict) {
-      pendingEvent = conflict;
-      eventTitle = conflict.title;
-      lastRelationshipEventWeek = gw;
-      lastWorkFamilyConflictWeek = gw;
+    if (!pendingEvent && annualProgression) {
+      const independentChildren = children.filter((child) => child.status === 'independent');
+      if (independentChildren.length > 0 && Math.random() < 0.16) {
+        const struggling = independentChildren.filter((child) => child.adultStatus === 'unemployed' || (child.debt ?? 0) > (child.savings ?? 0));
+        const adultChild = struggling.length > 0 ? randomOf(struggling) : randomOf(independentChildren);
+        const baseSupport = Math.round(3000 * (state.inflationMultiplier ?? 1));
+        const biggerSupport = Math.round(12000 * (state.inflationMultiplier ?? 1));
+        pendingEvent = {
+          id: `adult_child_support_${adultChild.id}_${state.year}`,
+          icon: '👨‍👩‍👧',
+          title: `${adultChild.name} Asks for Help`,
+          description: adultChild.homeStatus === 'renting'
+            ? `${adultChild.name} is trying to strengthen their finances and asks whether you can help with future housing costs.`
+            : `${adultChild.name} wants some extra financial room for the next step in life.`,
+          choices: [
+            { text: 'Help substantially', cost: biggerSupport, childId: adultChild.id, childSavings: biggerSupport, childRelationship: 7 },
+            { text: 'Help a little', cost: baseSupport, childId: adultChild.id, childSavings: baseSupport, childRelationship: 3 },
+            { text: 'They need to manage on their own', childId: adultChild.id, childRelationship: -4 },
+          ],
+        };
+      }
     }
-  }
+    if (!pendingEvent && partner) {
+      const eventPartner = adjustedConnections.find((c) => c.id === partner.id) ?? partner;
+      pendingEvent = eventPartner.relationship < 35
+        ? {
+            id: 'relationship_crisis',
+            icon: '💔',
+            title: 'Relationship at a Crossroads',
+            description: `${eventPartner.name} says something has to change if you are going to stay together.`,
+            choices: [
+              { text: 'Commit to rebuilding things', relationship: 10, happiness: -1, happinessDuration: 2,
+                memoryTag: 'made_time', memoryLabel: 'Committed to repairing the relationship', memorySentiment: 'positive' },
+              { text: 'Suggest counseling', relationship: 6, cost: Math.round(600 * (state.inflationMultiplier ?? 1)),
+                memoryTag: 'made_time', memoryLabel: 'Sought help to rebuild trust', memorySentiment: 'positive' },
+              { text: 'Avoid the conversation', relationship: -10 },
+            ],
+          }
+        : createRelationshipEvent(
+            { ...workingState, relationshipState: { ...workingState.relationshipState, activeConnections: adjustedConnections } },
+            eventPartner,
+            current.financialSnapshot ?? null,
+            currentSnapshot,
+            current.recentRelationshipEventIds ?? [],
+          );
+    }
 
-  if (!pendingEvent && !coupleTripActive && annualProgression && gw - lastRelationshipEventWeek >= 6) {
-    const independentChildren = children.filter((child) => child.status === 'independent');
-    if (independentChildren.length > 0 && Math.random() < 0.16) {
-      const struggling = independentChildren.filter((child) => child.adultStatus === 'unemployed' || (child.debt ?? 0) > (child.savings ?? 0));
-      const adultChild = struggling.length > 0 ? randomOf(struggling) : randomOf(independentChildren);
-      const baseSupport = Math.round(5000 * (state.inflationMultiplier ?? 1));
-      const biggerSupport = Math.round(12000 * (state.inflationMultiplier ?? 1));
-      pendingEvent = {
-        id: `adult_child_support_${adultChild.id}_${state.year}`,
-        icon: '👨‍👩‍👧',
-        title: `${adultChild.name} Asks for Help`,
-        description: adultChild.homeStatus === 'renting'
-          ? `${adultChild.name} is trying to strengthen their finances and asks whether you can help with future housing costs.`
-          : `${adultChild.name} wants some extra financial room for the next step in life.`,
-        choices: [
-          { text: 'Help substantially', cost: biggerSupport, childId: adultChild.id, childSavings: biggerSupport, childRelationship: 7 },
-          { text: 'Help a little', cost: baseSupport, childId: adultChild.id, childSavings: baseSupport, childRelationship: 3 },
-          { text: 'They need to manage on their own', childId: adultChild.id, childRelationship: -4 },
-        ],
-      };
+    if (pendingEvent) {
       eventTitle = pendingEvent.title;
       lastRelationshipEventWeek = gw;
-    }
-  }
-
-  if (
-    partner &&
-    !pendingEvent &&
-    !coupleTripActive &&
-    gw - lastRelationshipEventWeek >= 6
-  ) {
-    const eventPartner = adjustedConnections.find((c) => c.id === partner.id) ?? partner;
-    const generated = eventPartner.relationship < 35
-      ? {
-          id: 'relationship_crisis',
-          icon: '💔',
-          title: 'Relationship at a Crossroads',
-          description: `${eventPartner.name} says something has to change if you are going to stay together.`,
-          choices: [
-            { text: 'Commit to rebuilding things', relationship: 10, happiness: -1, happinessDuration: 2 },
-            { text: 'Suggest counseling', relationship: 6, cost: Math.round(600 * (state.inflationMultiplier ?? 1)) },
-            { text: 'Avoid the conversation', relationship: -10 },
-          ],
-        }
-      : createRelationshipEvent(
-          { ...workingState, relationshipState: { ...workingState.relationshipState, activeConnections: adjustedConnections } },
-          eventPartner,
-          current.financialSnapshot ?? null,
-          currentSnapshot,
-          current.recentRelationshipEventIds ?? [],
-        );
-    if (generated) {
-      pendingEvent = generated;
-      eventTitle = generated.title;
-      lastRelationshipEventWeek = gw;
+      relationshipEventWeeks = [...relationshipEventWeeks, gw];
     }
   }
 
@@ -2198,8 +2195,10 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
       financialObligations,
       timeline,
       lastRelationshipEventWeek,
+      relationshipEventWeeks,
       lastWorkFamilyConflictWeek,
       recentRelationshipEventIds,
+      memories: relationshipMemories,
       financialSnapshot: currentSnapshot,
       sharedGoal: partnerDiedName ? null : sharedGoal,
       lastStabilityWarningWeek,
