@@ -57,4 +57,27 @@ describe('Empire Cards advisor scoring audit', () => {
     expect(samples.length).toBe(236);
     expect(EMPIRE_CARDS.length).toBe(32);
   });
+
+  it('makes five different archetypes rewarding in their intended deck patterns', () => {
+    const patterns = [
+      { name: 'Sales', hand: ['sales-5','sales-6','sales-7','sales-8','finance-8','operations-8','innovation-8'], advisors: ['franchise','brand','trainer','logistics'], minPoints: 750 },
+      { name: 'Operations', hand: ['operations-5','operations-6','operations-7','operations-8','finance-8','sales-8','innovation-8'], advisors: ['operator','lean','trainer','logistics'], minPoints: 650 },
+      { name: 'Finance', hand: ['finance-5','finance-6','finance-7','finance-8','operations-8','sales-8','innovation-8'], advisors: ['venture','cfo','trainer','mergers'], minPoints: 700 },
+      { name: 'Innovation', hand: ['innovation-5','innovation-6','innovation-7','innovation-8','operations-8','finance-8','sales-8'], advisors: ['rnd','digital','trainer','lab'], minPoints: 700 },
+      { name: 'Diversified', hand: ['sales-8','operations-8','finance-8','innovation-8','sales-7','finance-7','innovation-7'], advisors: ['family','lab','digital','trainer'], minPoints: 700 },
+    ];
+    const report: { name: string; score: number; generic: number; combo: string | undefined }[] = [];
+    for (const pattern of patterns) {
+      const sample = { ...createEmpireRun(711), hand: pattern.hand, advisors: pattern.advisors };
+      const chosen = suggestEmpireHand(sample);
+      const score = previewEmpireHand(sample, chosen);
+      const genericRun = { ...sample, advisors: ['brand','operator','cfo','rnd'] };
+      const generic = previewEmpireHand(genericRun, suggestEmpireHand(genericRun));
+      report.push({ name: pattern.name, score: score.points, generic: generic.points, combo: score.combo?.name });
+      expect(score.points).toBeGreaterThan(pattern.minPoints);
+      expect(score.points).toBeGreaterThan(generic.points * 1.2);
+    }
+    console.info('Empire Cards specialist build showcase', report);
+    expect(report).toHaveLength(5);
+  });
 });
