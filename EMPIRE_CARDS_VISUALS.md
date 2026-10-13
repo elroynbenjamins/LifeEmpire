@@ -26,12 +26,12 @@ The accent appears on a slim top strip, icon, point-badge outline and selection 
 ## Interactions and readability
 
 - Selection: colored outline, checkmark and the original 120–145 ms lift animation
-- Suggested scoring hand: filled star indicator; user must still press Play Hand
-- Suggested discard: dashed frame and replacement indicator; user must still press Replace Cards
+- Optional Strategy Hint: displays contextual guidance without highlighting, choosing or playing cards
+- Discard mode: player chooses their own replacements; a free hint explains trade-offs but never suggests exact cards
 - Boss card-value penalty: small warning icon only when the active boss actually reduces that department, omitted if Crisis Consultant protects the hand
 - Compact phones: three cards per row below 380 logical pixels; otherwise four per row
 - Honors the device's reduced-motion setting
-- The score preview continues to display actual scores, combination multipliers and Advisor contributions
+- The live score preview continues to display actual scores, combination multipliers and Advisor contributions for the cards the player manually selects
 - Advisor shop offers and equipped Advisor summary now use distinct small glyphs and rarity accent colors
 
 ## Future art pass
