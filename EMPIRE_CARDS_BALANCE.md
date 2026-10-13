@@ -30,7 +30,7 @@ The Inflation boss raises its quarter target by 20%. The other bosses primarily 
 
 - Quarter rewards: 7 Run Capital plus 2 per unused hand; Tax Specialist adds another 2.
 - Two distinct Advisor offers, one random combination upgrade, one improved card offer.
-- Advisor slots stay limited to four.
+- Advisor slots stay limited to four. When slots are full, a player may explicitly choose which existing Advisor to replace before purchasing another one.
 - Optional combination-specific training (level 1–4) costs 7/9/11/13 Capital and increases that combo's multiplier by 0.25 per level.
 - Optional card retirement (up to 4 cards, never fewer than 20 total) costs 4/6/8/10 Capital.
 - Rerolling offers costs 2 Run Capital.
