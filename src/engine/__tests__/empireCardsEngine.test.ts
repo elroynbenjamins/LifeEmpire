@@ -76,7 +76,7 @@ describe('Empire Cards - fixed content contract', () => {
     expect(quarterTarget(run)).toBe(Math.ceil(EMPIRE_QUARTERS[2].target * 1.2));
     const antiTrust = { ...run, bosses: ['anti_trust', 'recession', 'inflation'] };
     expect(previewEmpireHand(antiTrust, [0, 1, 2, 3]).multiplier).toBe(2.25);
-    expect(previewEmpireHand({ ...antiTrust, advisors: ['crisis'] }, [0, 1, 2, 3]).multiplier).toBe(3.25);
+    expect(previewEmpireHand({ ...antiTrust, advisors: ['crisis'] }, [0, 1, 2, 3]).multiplier).toBe(3.4);
   });
 
   it('discards up to four cards while keeping a full hand and preserving immutability', () => {
