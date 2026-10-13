@@ -221,6 +221,14 @@ export default function DashboardScreen() {
 
         <FirstStepsCard />
 
+        <GameCard variant="subtle" compact eyebrow="OPTIONAL ACTIVITY" title="Empire Cards" accentColor={Colors.business} onPress={() => router.push('/empire-cards')}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Ionicons name="layers-outline" color={Colors.business} size={22} />
+            <Text style={{ flex: 1, color: Colors.textSecondary, fontSize: 12 }}>Build card combinations, recruit CEO Advisors and survive 8 business quarters.</Text>
+            <Ionicons name="chevron-forward" color={Colors.textMuted} size={17} />
+          </View>
+        </GameCard>
+
         {latestAnnualReport && (
           <GameCard
             variant="subtle"
