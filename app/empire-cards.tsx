@@ -89,7 +89,7 @@ export default function EmpireCardsScreen() {
         {readyKey !== storageKey ? <Text style={styles.muted}>Loading saved run...</Text> : !run ? (
           <>
             <GameCard variant="hero" title="Build a Business Empire" eyebrow="OPTIONAL ACTIVITY" accentColor={Colors.business}>
-              <Text style={styles.description}>Play powerful combinations of Sales, Operations, Finance and Innovation cards. Add Advisors, upgrade your strategy and defeat economic crises.</Text>
+              <Text style={styles.description}>Draw 7 cards, select up to 4, and combine departments to score. Clear each target before your hands run out; then recruit Advisors and improve your deck between quarters.</Text>
               <View style={styles.factRow}>
                 <Text style={styles.fact}>32 starting cards</Text><Text style={styles.fact}>15 Advisors</Text>
                 <Text style={styles.fact}>8 combinations</Text><Text style={styles.fact}>8 quarters</Text>
@@ -142,7 +142,7 @@ export default function EmpireCardsScreen() {
                     <Text style={styles.description}>{mode === 'discard' ? 'Replace selected cards' : preview?.combo?.name ?? 'Basic Play'}</Text>
                     <Text style={styles.title}>{mode === 'discard' ? selected.length + ' selected' : '+' + (preview?.points ?? 0).toLocaleString('en-US')}</Text>
                   </View>
-                  {mode === 'play' && <Text style={styles.note}>Base {preview?.base ?? 0} × {(preview?.multiplier ?? 1).toFixed(2)} · Advisor effects included</Text>}
+                  {mode === 'play' && <Text style={styles.note}>Base {preview?.base ?? 0} × {(preview?.multiplier ?? 1).toFixed(2)} · Advisor effects included · {Math.max(0, target - run.score - (preview?.points ?? 0)).toLocaleString('en-US')} points still needed</Text>}
                 </View>
                 <View style={styles.actionRow}>
                   {mode === 'play' ? (
@@ -167,7 +167,7 @@ export default function EmpireCardsScreen() {
 
             {run.phase === 'shop' && (
               <GameCard title="Investment Shop" eyebrow="QUARTER CLEARED" accentColor={Colors.primary}>
-                <Text style={styles.description}>Spend Run Capital to strengthen this run, or save it for later.</Text>
+                <Text style={styles.description}>Spend Run Capital to strengthen this run, or save it for later. Purchased Advisors last until the run ends.</Text>
                 {run.offers.map((offer, index) => {
                   const title = offer.kind === 'advisor' ? ADVISOR_MAP[offer.id]?.name : offer.kind === 'upgrade' ? (COMBO_MAP[offer.id]?.name + ' Training') : CARD_MAP[offer.id]?.name;
                   const description = offer.kind === 'advisor' ? ADVISOR_MAP[offer.id]?.description : offer.kind === 'upgrade' ? 'Increase this combination multiplier by +0.25.' : 'Add one copy of this card to your deck.';
