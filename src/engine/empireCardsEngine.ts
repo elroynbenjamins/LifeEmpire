@@ -29,6 +29,9 @@ export interface EmpireRun {
   lastMessage: string;
   lastHandScore: number;
   totalHandsPlayed: number;
+  /** Optional for older saved v1 runs. */
+  retiredCards?: number;
+  lastComboId?: string | null;
 }
 
 const CARD_GROUPS: { department: Department; names: string[]; points: number[] }[] = [
@@ -57,18 +60,18 @@ export const EMPIRE_ADVISORS: Advisor[] = [
   { id: 'digital', name: 'Digital Pioneer', description: '+25 base points with Innovation + Sales.', rarity: 'common' },
   { id: 'mergers', name: 'M&A Attorney', description: '×1.4 for a Joint Venture.', rarity: 'uncommon' },
   { id: 'trainer', name: 'Corporate Trainer', description: '+8 base points for every card played.', rarity: 'common' },
-  { id: 'crisis', name: 'Crisis Consultant', description: 'Ignores card penalties during boss quarters.', rarity: 'rare' },
+  { id: 'crisis', name: 'Crisis Consultant', description: 'Ignores boss card penalties; +20 base points during boss quarters.', rarity: 'rare' },
 ];
 
 export const EMPIRE_COMBOS: Combo[] = [
-  { id: 'dominance', name: 'Industry Dominance', multiplier: 3.5, description: 'Four cards from one department.' },
-  { id: 'diversified', name: 'Diversified Empire', multiplier: 2.5, description: 'One card from each department.' },
-  { id: 'venture', name: 'Joint Venture', multiplier: 2.25, description: 'Two cards from each of two departments.' },
-  { id: 'specialization', name: 'Specialization', multiplier: 2, description: 'Three cards from one department.' },
-  { id: 'supply', name: 'Supply Chain', multiplier: 2, description: '2 Operations + Sales + Finance.' },
-  { id: 'startup', name: 'Startup Accelerator', multiplier: 1.9, description: '2 Innovation + Sales + Finance.' },
-  { id: 'expansion', name: 'Market Expansion', multiplier: 1.85, description: '2 Sales + Operations + Innovation.' },
-  { id: 'partnership', name: 'Department Partnership', multiplier: 1.5, description: 'At least two cards of one department.' },
+  { id: 'dominance', name: 'Industry Dominance', multiplier: 3.25, description: 'Four cards from one department.' },
+  { id: 'diversified', name: 'Diversified Empire', multiplier: 2.65, description: 'One card from each department.' },
+  { id: 'venture', name: 'Joint Venture', multiplier: 2.45, description: 'Two cards from each of two departments.' },
+  { id: 'specialization', name: 'Specialization', multiplier: 2.15, description: 'Three cards from one department.' },
+  { id: 'supply', name: 'Supply Chain', multiplier: 2.4, description: '2 Operations + Sales + Finance.' },
+  { id: 'startup', name: 'Startup Accelerator', multiplier: 2.35, description: '2 Innovation + Sales + Finance.' },
+  { id: 'expansion', name: 'Market Expansion', multiplier: 2.35, description: '2 Sales + Operations + Innovation.' },
+  { id: 'partnership', name: 'Department Partnership', multiplier: 1.6, description: 'At least two cards of one department.' },
 ];
 
 export const EMPIRE_BOSSES: Boss[] = [
@@ -83,12 +86,12 @@ export const EMPIRE_BOSSES: Boss[] = [
 export const EMPIRE_QUARTERS: Quarter[] = [
   { name: 'Startup Launch', target: 350 },
   { name: 'First Customers', target: 520 },
-  { name: 'Market Downturn', target: 720 },
-  { name: 'National Expansion', target: 1050 },
-  { name: 'Corporate Growth', target: 1450 },
-  { name: 'International Competition', target: 1950 },
-  { name: 'Holding Formation', target: 2500 },
-  { name: 'Global Business Empire', target: 3200 },
+  { name: 'Market Downturn', target: 730 },
+  { name: 'National Expansion', target: 980 },
+  { name: 'Corporate Growth', target: 1330 },
+  { name: 'International Competition', target: 1700 },
+  { name: 'Holding Formation', target: 2120 },
+  { name: 'Global Business Empire', target: 2500 },
 ];
 
 export function randomStep(seed: number): number {
@@ -98,7 +101,8 @@ function shuffled<T>(values: T[], seed: number): [T[], number] {
   const result = [...values];
   for (let i = result.length - 1; i > 0; i--) {
     seed = randomStep(seed);
-    const j = seed % (i + 1);
+    // Use high-order random bits: LCG low bits produce highly patterned shuffles.
+    const j = Math.floor((seed / 4294967296) * (i + 1));
     [result[i], result[j]] = [result[j], result[i]];
   }
   return [result, seed];
@@ -119,27 +123,32 @@ function makeOffers(run: EmpireRun): EmpireRun {
   let seed = run.seed;
   const available = EMPIRE_ADVISORS.filter(a => !run.advisors.includes(a.id));
   const offers: Offer[] = [];
-  if (available.length && run.advisors.length < 4) {
-    seed = randomStep(seed);
-    const advisor = available[seed % available.length];
-    offers.push({ kind: 'advisor', id: advisor.id, cost: advisor.rarity === 'rare' ? 9 : advisor.rarity === 'uncommon' ? 7 : 5 });
+  // Two distinct Advisor choices reduce bad-luck shops without increasing the four-slot cap.
+  if (run.advisors.length < 4) {
+    const [pool, nextSeed] = shuffled(available, seed);
+    seed = nextSeed;
+    for (const advisor of pool.slice(0, 2)) {
+      offers.push({ kind: 'advisor', id: advisor.id, cost: advisor.rarity === 'rare' ? 9 : advisor.rarity === 'uncommon' ? 7 : 5 });
+    }
   }
   seed = randomStep(seed);
-  offers.push({ kind: 'upgrade', id: EMPIRE_COMBOS[seed % EMPIRE_COMBOS.length].id, cost: 6 });
+  offers.push({ kind: 'upgrade', id: EMPIRE_COMBOS[Math.floor(seed / 4294967296 * EMPIRE_COMBOS.length)].id, cost: 6 });
   seed = randomStep(seed);
-  offers.push({ kind: 'card', id: EMPIRE_CARDS[seed % EMPIRE_CARDS.length].id, cost: 4 });
+  // Draft a stronger card instead of diluting the deck with a random low-value copy.
+  const potential = EMPIRE_CARDS.filter(c => c.points >= 28);
+  offers.push({ kind: 'card', id: potential[Math.floor(seed / 4294967296 * potential.length)].id, cost: 4 });
   return { ...run, offers, seed };
 }
 export function createEmpireRun(seed = Date.now() >>> 0): EmpireRun {
   const normalized = (seed >>> 0) || 1;
   let deck: string[], newSeed: number;
   [deck, newSeed] = shuffled(EMPIRE_CARDS.map(c => c.id), normalized);
-  const [bosses] = shuffled(EMPIRE_BOSSES.map(b => b.id), newSeed);
+  const [bosses, bossSeed] = shuffled(EMPIRE_BOSSES.map(b => b.id), newSeed);
   return pull({
-    version: 1, seed: newSeed, quarter: 1, phase: 'play', score: 0,
+    version: 1, seed: bossSeed, quarter: 1, phase: 'play', score: 0,
     handsLeft: 3, discardsLeft: 2, capital: 0, deck, hand: [], discarded: [],
     advisors: [], upgrades: {}, bosses: bosses.slice(0, 3),
-    offers: [], lastMessage: 'Select up to 4 cards, then Play Hand.', lastHandScore: 0, totalHandsPlayed: 0,
+    offers: [], lastMessage: 'Select up to 4 cards, then Play Hand.', lastHandScore: 0, totalHandsPlayed: 0, retiredCards: 0, lastComboId: null,
   }, 7);
 }
 export function currentBoss(run: EmpireRun): Boss | null {
@@ -193,6 +202,7 @@ export function previewEmpireHand(run: EmpireRun, indices: number[]): ScorePrevi
   if (has('logistics') && counts.sales && counts.operations) base += 30;
   if (has('digital') && counts.innovation && counts.sales) base += 25;
   if (has('trainer')) base += cards.length * 8;
+  if (has('crisis') && boss) base += 20;
   // Antitrust caps combination upgrades, not independently purchased advisor effects.
   if (boss?.id === 'anti_trust' && !protectedFromBoss) multiplier = Math.min(2.25, multiplier);
   if (has('franchise') && counts.sales >= 3) multiplier *= 1.5;
@@ -212,12 +222,12 @@ export function playEmpireHand(run: EmpireRun, indices: number[]): EmpireRun {
     ...run, hand: remaining, discarded: [...run.discarded, ...consumed],
     score: run.score + handScore.points, handsLeft: run.handsLeft - 1,
     totalHandsPlayed: run.totalHandsPlayed + 1,
-    lastHandScore: handScore.points,
+    lastHandScore: handScore.points, lastComboId: handScore.combo?.id ?? null,
     lastMessage: (handScore.combo?.name ?? 'Basic Play') + ': +' + handScore.points.toLocaleString('en-US') + ' points.',
   };
   if (next.score >= quarterTarget(next)) {
     if (next.quarter === EMPIRE_QUARTERS.length) return { ...next, phase: 'won', lastMessage: 'Empire completed! All eight quarters cleared.' };
-    const reward = 6 + next.handsLeft * 2 + (next.advisors.includes('tax') ? 2 : 0);
+    const reward = 7 + next.handsLeft * 2 + (next.advisors.includes('tax') ? 2 : 0);
     return makeOffers({ ...next, phase: 'shop', capital: next.capital + reward, lastMessage: 'Quarter cleared! +' + reward + ' Run Capital.' });
   }
   if (next.handsLeft === 0) return { ...next, phase: 'lost', lastMessage: 'The quarter target was not reached. Run over.' };
@@ -243,6 +253,37 @@ export function buyEmpireOffer(run: EmpireRun, index: number): EmpireRun {
   next.lastMessage = 'Purchased ' + (offer.kind === 'advisor' ? EMPIRE_ADVISORS.find(a => a.id === offer.id)?.name : offer.kind === 'upgrade' ? EMPIRE_COMBOS.find(c => c.id === offer.id)?.name : CARD_BY_ID[offer.id]?.name) + '.';
   return next;
 }
+/** Buy the combination you actually want, rather than depending only on RNG. */
+export function trainEmpireCombo(run: EmpireRun, comboId: string): EmpireRun {
+  if (run.phase !== 'shop' || !EMPIRE_COMBOS.some(c => c.id === comboId)) return run;
+  const currentLevel = run.upgrades[comboId] ?? 0;
+  const cost = 7 + currentLevel * 2;
+  if (currentLevel >= 4 || run.capital < cost) return run;
+  return {
+    ...run, capital: run.capital - cost,
+    upgrades: { ...run.upgrades, [comboId]: currentLevel + 1 },
+    lastMessage: EMPIRE_COMBOS.find(c => c.id === comboId)!.name + ' trained to level ' + (currentLevel + 1) + '.',
+  };
+}
+/** Permanently trim a low-value card from this run's deck, never below 20 cards. */
+export function retireEmpireCard(run: EmpireRun, cardId: string): EmpireRun {
+  if (run.phase !== 'shop' || !CARD_BY_ID[cardId]) return run;
+  const retired = run.retiredCards ?? 0;
+  const count = run.deck.length + run.hand.length + run.discarded.length;
+  const cost = 4 + retired * 2;
+  if (retired >= 4 || count <= 20 || run.capital < cost) return run;
+  const fields = ['deck', 'hand', 'discarded'] as const;
+  for (const field of fields) {
+    const index = run[field].indexOf(cardId);
+    if (index >= 0) {
+      const cards = [...run[field]];
+      cards.splice(index, 1);
+      return { ...run, [field]: cards, retiredCards: retired + 1,
+        capital: run.capital - cost, lastMessage: 'Retired ' + CARD_BY_ID[cardId].name + ' from your run.' };
+    }
+  }
+  return run;
+}
 export function rerollEmpireShop(run: EmpireRun): EmpireRun {
   return run.phase !== 'shop' || run.capital < 2 ? run : makeOffers({ ...run, capital: run.capital - 2 });
 }
@@ -252,7 +293,7 @@ export function nextEmpireQuarter(run: EmpireRun): EmpireRun {
   [deck, seed] = shuffled([...run.deck, ...run.hand, ...run.discarded], run.seed);
   const next: EmpireRun = {
     ...run, quarter: run.quarter + 1, phase: 'play', score: 0,
-    handsLeft: 3, discardsLeft: 2, seed, deck, hand: [], discarded: [], offers: [],
+    handsLeft: run.quarter + 1 >= 5 ? 4 : 3, discardsLeft: run.quarter + 1 >= 5 ? 3 : 2, seed, deck, hand: [], discarded: [], offers: [],
     lastHandScore: 0, lastMessage: 'A new quarter begins. Select your cards.',
   };
   return pull(next, 7);
