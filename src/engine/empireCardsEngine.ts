@@ -90,8 +90,8 @@ export const EMPIRE_QUARTERS: Quarter[] = [
   { name: 'National Expansion', target: 980 },
   { name: 'Corporate Growth', target: 1330 },
   { name: 'International Competition', target: 1700 },
-  { name: 'Holding Formation', target: 2120 },
-  { name: 'Global Business Empire', target: 2500 },
+  { name: 'Holding Formation', target: 1950 },
+  { name: 'Global Business Empire', target: 2100 },
 ];
 
 export function randomStep(seed: number): number {
