@@ -35,11 +35,13 @@ export default function EmpireCardsScreen() {
   const [showGuide, setShowGuide] = useState(false);
   const [shopPanel, setShopPanel] = useState<'offers' | 'training' | 'retire'>('offers');
   const [retireDepartment, setRetireDepartment] = useState<'sales' | 'operations' | 'finance' | 'innovation'>('sales');
+  const [replacementAdvisor, setReplacementAdvisor] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
     setReadyKey(null);
     setRun(null);
     setSelected([]);
+    setReplacementAdvisor(null);
     AsyncStorage.getItem(storageKey).then(value => {
       if (!active) return;
       try {
@@ -168,12 +170,20 @@ export default function EmpireCardsScreen() {
             {run.phase === 'shop' && (
               <GameCard title="Investment Shop" eyebrow="QUARTER CLEARED" accentColor={Colors.primary}>
                 <Text style={styles.description}>Spend Run Capital to strengthen this run, or save it for later. Purchased Advisors last until the run ends.</Text>
+                {run.advisors.length >= 4 && <View style={styles.shopPanel}>
+                  <Text style={styles.description}>All four Advisor slots are full. To recruit another Advisor, first select an existing one to replace. Otherwise, keep your team.</Text>
+                  <View style={styles.factRow}>
+                    {run.advisors.map(id => <Pressable key={id} accessibilityRole="button" onPress={() => setReplacementAdvisor(replacementAdvisor === id ? null : id)} style={[styles.departmentChip, replacementAdvisor === id && styles.departmentChipActive]}>
+                      <Text style={styles.departmentChipText}>{replacementAdvisor === id ? '✓ ' : ''}{ADVISOR_MAP[id]?.name ?? id}</Text>
+                    </Pressable>)}
+                  </View>
+                </View>}
                 {run.offers.map((offer, index) => {
                   const title = offer.kind === 'advisor' ? ADVISOR_MAP[offer.id]?.name : offer.kind === 'upgrade' ? (COMBO_MAP[offer.id]?.name + ' Training') : CARD_MAP[offer.id]?.name;
                   const description = offer.kind === 'advisor' ? ADVISOR_MAP[offer.id]?.description : offer.kind === 'upgrade' ? 'Increase this combination multiplier by +0.25.' : 'Add one copy of this card to your deck.';
                   return <View key={index} style={styles.offer}>
                     <View style={styles.flex}><Text style={styles.title}>{title}</Text><Text style={styles.note}>{description}</Text></View>
-                    <GameButton label={offer.cost + ' Capital'} compact disabled={run.capital < offer.cost || (offer.kind === 'advisor' && run.advisors.length >= 4)} onPress={() => update(r => buyEmpireOffer(r, index))} />
+                    <GameButton label={offer.cost + ' Capital'} compact disabled={run.capital < offer.cost || (offer.kind === 'advisor' && run.advisors.length >= 4 && !replacementAdvisor)} onPress={() => { update(r => buyEmpireOffer(r, index, replacementAdvisor ?? undefined)); setReplacementAdvisor(null); }} />
                   </View>;
                 })}
                 <View style={styles.actionRow}>
@@ -207,7 +217,7 @@ export default function EmpireCardsScreen() {
                 </View>}
                 <View style={styles.actionRow}>
                   <View style={styles.flex}><GameButton label="Reroll Offers · 2" compact icon="refresh" variant="secondary" disabled={run.capital < 2} onPress={() => update(r => rerollEmpireShop(r))} /></View>
-                  <View style={styles.flex}><GameButton label="Next Quarter" compact icon="arrow-forward" onPress={() => { update(nextEmpireQuarter); setShopPanel('offers'); }} /></View>
+                  <View style={styles.flex}><GameButton label="Next Quarter" compact icon="arrow-forward" onPress={() => { update(nextEmpireQuarter); setShopPanel('offers'); setReplacementAdvisor(null); }} /></View>
                 </View>
               </GameCard>
             )}
