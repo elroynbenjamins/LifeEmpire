@@ -159,6 +159,24 @@ describe('Empire Cards - fixed content contract', () => {
     expect(nextEmpireQuarter({ ...shop, quarter: 4 }).handsLeft).toBe(4);
   });
 
+  it('requires an explicit replacement when four Advisors are active', () => {
+    const initial = createEmpireRun(509);
+    const oldAdvisors = ['brand', 'operator', 'cfo', 'rnd'];
+    const shop = playEmpireHand({ ...initial, score: quarterTarget(initial) - 1, advisors: oldAdvisors }, [0]);
+    const offeredAdvisorIndex = shop.offers.findIndex(o => o.kind === 'advisor');
+    expect(offeredAdvisorIndex).toBeGreaterThanOrEqual(0);
+    const offeredId = shop.offers[offeredAdvisorIndex].id;
+    const funded = { ...shop, capital: 50 };
+    expect(buyEmpireOffer(funded, offeredAdvisorIndex)).toBe(funded);
+    expect(buyEmpireOffer(funded, offeredAdvisorIndex, 'missing')).toBe(funded);
+    const swapped = buyEmpireOffer(funded, offeredAdvisorIndex, oldAdvisors[1]);
+    expect(swapped.advisors).toHaveLength(4);
+    expect(swapped.advisors).not.toContain(oldAdvisors[1]);
+    expect(swapped.advisors).toContain(offeredId);
+    expect(swapped.capital).toBeLessThan(funded.capital);
+    expect(funded.advisors).toEqual(oldAdvisors);
+  });
+
   it('rejects invalid actions', () => {
     const run = createEmpireRun(568);
     expect(playEmpireHand(run, [])).toBe(run);
