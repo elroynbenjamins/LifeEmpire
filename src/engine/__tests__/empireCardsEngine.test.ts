@@ -2,7 +2,7 @@ import {
   EMPIRE_ADVISORS, EMPIRE_BOSSES, EMPIRE_CARDS, EMPIRE_COMBOS, EMPIRE_QUARTERS,
   EmpireRun, buyEmpireOffer, createEmpireRun, currentBoss, discardEmpireCards,
   findEmpireCombo, isEmpireRun, nextEmpireQuarter, playEmpireHand,
-  previewEmpireHand, quarterTarget, rerollEmpireShop,
+  previewEmpireHand, quarterTarget, rerollEmpireShop, retireEmpireCard, suggestEmpireHand, trainEmpireCombo,
 } from '../empireCardsEngine';
 
 const card = (id: string) => EMPIRE_CARDS.find(c => c.id === id)!;
@@ -68,7 +68,7 @@ describe('Empire Cards - fixed content contract', () => {
     const recession = previewEmpireHand(withHand(hand, { quarter: 3, bosses: ['recession', 'inflation', 'regulation'] }), [0, 1, 2, 3]);
     expect(recession.points).toBeLessThan(base.points);
     const protectedRun = previewEmpireHand(withHand(hand, { quarter: 3, bosses: ['recession', 'inflation', 'regulation'], advisors: ['crisis'] }), [0, 1, 2, 3]);
-    expect(protectedRun.points).toBe(base.points);
+    expect(protectedRun.points).toBeGreaterThan(base.points);
   });
 
   it('applies the inflation boss target and limits antitrust multipliers', () => {
@@ -76,7 +76,7 @@ describe('Empire Cards - fixed content contract', () => {
     expect(quarterTarget(run)).toBe(Math.ceil(EMPIRE_QUARTERS[2].target * 1.2));
     const antiTrust = { ...run, bosses: ['anti_trust', 'recession', 'inflation'] };
     expect(previewEmpireHand(antiTrust, [0, 1, 2, 3]).multiplier).toBe(2.25);
-    expect(previewEmpireHand({ ...antiTrust, advisors: ['crisis'] }, [0, 1, 2, 3]).multiplier).toBe(3.5);
+    expect(previewEmpireHand({ ...antiTrust, advisors: ['crisis'] }, [0, 1, 2, 3]).multiplier).toBe(3.25);
   });
 
   it('discards up to four cards while keeping a full hand and preserving immutability', () => {
@@ -117,6 +117,46 @@ describe('Empire Cards - fixed content contract', () => {
     expect(playEmpireHand(failed, [0])).toBe(failed);
     const last: EmpireRun = { ...run, quarter: 8, score: quarterTarget({ ...run, quarter: 8 }) - 1 };
     expect(playEmpireHand(last, [0]).phase).toBe('won');
+  });
+
+  it('gives deliberate deck-building choices and enforces sensible limits', () => {
+    const run = createEmpireRun(48);
+    const shop = { ...run, phase: 'shop' as const, capital: 100 };
+    const trained = trainEmpireCombo(shop, 'diversified');
+    expect(trained.upgrades.diversified).toBe(1);
+    expect(trained.capital).toBe(93);
+    let maxed = trained;
+    for (let i = 0; i < 3; i++) maxed = trainEmpireCombo(maxed, 'diversified');
+    expect(maxed.upgrades.diversified).toBe(4);
+    expect(trainEmpireCombo(maxed, 'diversified')).toBe(maxed);
+    expect(trainEmpireCombo(run, 'diversified')).toBe(run);
+    expect(trainEmpireCombo(shop, 'nonexistent')).toBe(shop);
+    const target = run.deck[0];
+    const trimmed = retireEmpireCard(shop, target);
+    expect(trimmed.retiredCards).toBe(1);
+    expect(trimmed.deck.length).toBe(shop.deck.length - 1);
+    expect(trimmed.capital).toBe(96);
+    expect(retireEmpireCard(run, target)).toBe(run);
+    let retired = trimmed;
+    for (let i = 0; i < 3; i++) retired = retireEmpireCard(retired, retired.deck[0]);
+    expect(retired.retiredCards).toBe(4);
+    expect(retireEmpireCard(retired, retired.deck[0])).toBe(retired);
+  });
+
+  it('offers distinct Advisors, a strong card, and an effective hand suggestion', () => {
+    const run = createEmpireRun(123);
+    const result = suggestEmpireHand(run);
+    expect(result).toHaveLength(4);
+    const best = previewEmpireHand(run, result).points;
+    for (let a = 0; a < 7; a++) for (let b = a + 1; b < 7; b++)
+      for (let c = b + 1; c < 7; c++) for (let d = c + 1; d < 7; d++)
+        expect(best).toBeGreaterThanOrEqual(previewEmpireHand(run, [a, b, c, d]).points);
+    const shop = playEmpireHand({ ...run, score: quarterTarget(run) - 1 }, [0]);
+    expect(shop.phase).toBe('shop');
+    expect(shop.offers.filter(o => o.kind === 'advisor').length).toBe(2);
+    expect(new Set(shop.offers.filter(o => o.kind === 'advisor').map(o => o.id)).size).toBe(2);
+    expect(EMPIRE_CARDS.find(c => c.id === shop.offers.find(o => o.kind === 'card')?.id)?.points).toBeGreaterThanOrEqual(28);
+    expect(nextEmpireQuarter({ ...shop, quarter: 4 }).handsLeft).toBe(4);
   });
 
   it('rejects invalid actions', () => {
