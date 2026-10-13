@@ -12,10 +12,10 @@ import { EmpirePhaseReveal, EmpireScorePulse, useEmpireReducedMotion } from '../
 import { Colors } from '../src/theme/colors';
 import useGameStore from '../src/store/gameStore';
 import {
-  EMPIRE_ADVISORS, EMPIRE_BOSSES, EMPIRE_CARDS, EMPIRE_COMBOS, EMPIRE_QUARTERS,
+  EMPIRE_ADVISORS, EMPIRE_BOSSES, EMPIRE_CARDS, EMPIRE_COMBOS, EMPIRE_QUARTERS, EMPIRE_DIFFICULTIES, EmpireDifficulty,
   EmpireRun, buyEmpireOffer, createEmpireRun, currentBoss, discardEmpireCards,
   isEmpireRun, nextEmpireQuarter, playEmpireHand, previewEmpireHand,
-  quarterTarget, rerollEmpireShop, retireEmpireCard, suggestEmpireHand, trainEmpireCombo,
+  quarterTarget, rerollEmpireShop, retireEmpireCard, suggestEmpireHand, suggestEmpireDiscard, trainEmpireCombo,
 } from '../src/engine/empireCardsEngine';
 
 const CARD_MAP = Object.fromEntries(EMPIRE_CARDS.map(c => [c.id, c]));
@@ -36,6 +36,7 @@ export default function EmpireCardsScreen() {
   const [selected, setSelected] = useState<number[]>([]);
   const [mode, setMode] = useState<'play' | 'discard'>('play');
   const [showGuide, setShowGuide] = useState(false);
+  const [startDifficulty, setStartDifficulty] = useState<EmpireDifficulty>('standard');
   const [shopPanel, setShopPanel] = useState<'offers' | 'training' | 'retire'>('offers');
   const [retireDepartment, setRetireDepartment] = useState<'sales' | 'operations' | 'finance' | 'innovation'>('sales');
   const [replacementAdvisor, setReplacementAdvisor] = useState<string | null>(null);
@@ -78,9 +79,9 @@ export default function EmpireCardsScreen() {
     if (run && run.phase !== 'won' && run.phase !== 'lost') {
       Alert.alert('Abandon current run?', 'Run-only progress and Advisors will be lost.', [
         { text: 'Keep playing', style: 'cancel' },
-        { text: 'Start over', style: 'destructive', onPress: () => { setRun(createEmpireRun()); setSelected([]); setMode('play'); } },
+        { text: 'Start over', style: 'destructive', onPress: () => { setRun(createEmpireRun(Date.now() >>> 0, run?.difficulty ?? startDifficulty)); setSelected([]); setMode('play'); } },
       ]);
-    } else { setRun(createEmpireRun()); setSelected([]); setMode('play'); }
+    } else { setRun(createEmpireRun(Date.now() >>> 0, run?.difficulty ?? startDifficulty)); setSelected([]); setMode('play'); }
   };
   const boss = run ? currentBoss(run) : null;
   const preview = run ? previewEmpireHand(run, selected) : null;
@@ -101,7 +102,17 @@ export default function EmpireCardsScreen() {
                 <Text style={styles.fact}>6 boss effects</Text>
               </View>
               <Text style={styles.note}>An entire run uses separate Run Capital. It does not change your personal cash, gems or weekly progress.</Text>
-              <GameButton label="Start Empire Cards" icon="play" onPress={() => setRun(createEmpireRun())} />
+              <Text style={styles.title}>Choose challenge</Text>
+              <View style={styles.difficultyRow}>
+                {(Object.keys(EMPIRE_DIFFICULTIES) as EmpireDifficulty[]).map(id => (
+                  <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: startDifficulty === id }}
+                    onPress={() => setStartDifficulty(id)} style={[styles.difficultyChoice, startDifficulty === id && styles.difficultyActive]}>
+                    <Text style={[styles.difficultyTitle, startDifficulty === id && { color: Colors.primary }]}>{EMPIRE_DIFFICULTIES[id].label}</Text>
+                    <Text style={styles.note}>{EMPIRE_DIFFICULTIES[id].description}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <GameButton label="Start Empire Cards" icon="play" onPress={() => setRun(createEmpireRun(Date.now() >>> 0, startDifficulty))} />
             </GameCard>
             <GameButton label="How combinations work" icon="help-circle-outline" variant="secondary" onPress={() => setShowGuide(!showGuide)} />
           </>
@@ -112,6 +123,7 @@ export default function EmpireCardsScreen() {
               <View style={styles.stat}><Text style={styles.statLabel}>CAPITAL</Text><Text style={styles.statValue}>{run.capital}</Text></View>
               <View style={styles.stat}><Text style={styles.statLabel}>ADVISORS</Text><Text style={styles.statValue}>{run.advisors.length}/4</Text></View>
             </View>
+            <Text style={styles.difficultyContext}>{EMPIRE_DIFFICULTIES[run.difficulty ?? 'standard']?.label ?? 'Standard'} difficulty · Targets adjust by difficulty only</Text>
             <EmpirePhaseReveal phaseKey={run.quarter + ':' + run.phase} reduceMotion={reduceMotion}>
             <GameCard title={quarter?.name ?? 'Empire Cards'} eyebrow={boss ? 'BOSS QUARTER' : 'CURRENT QUARTER'} accentColor={boss ? Colors.warning : Colors.business}>
               {boss && <View style={styles.boss}><Text style={styles.title}>{'⚠️ ' + boss.name}</Text><Text style={styles.description}>{boss.description}</Text></View>}
@@ -126,6 +138,7 @@ export default function EmpireCardsScreen() {
 
             {run.phase === 'play' && (
               <GameCard title="Your hand" eyebrow="SELECT UP TO 4" titleAccessory={<Text style={styles.muted}>{run.hand.length} cards</Text>}>
+                <EmpirePhaseReveal phaseKey={run.quarter + ':' + run.hand.join(',')} reduceMotion={reduceMotion}>
                 <View style={styles.cards}>
                   {run.hand.map((id, index) => {
                     const card = CARD_MAP[id];
@@ -140,6 +153,7 @@ export default function EmpireCardsScreen() {
                     ) : null;
                   })}
                 </View>
+                </EmpirePhaseReveal>
                 <View style={styles.preview}>
                   <View style={styles.scoreRow}>
                     <Text style={styles.description}>{mode === 'discard' ? 'Replace selected cards' : preview?.combo?.name ?? 'Basic Play'}</Text>
@@ -165,7 +179,7 @@ export default function EmpireCardsScreen() {
                   )}
                 </View>
                 <View style={styles.actionRow}>
-                  <View style={styles.flex}><GameButton label="Suggest Best Hand" icon="bulb-outline" variant="ghost" compact onPress={() => { setMode('play'); setSelected(suggestEmpireHand(run)); }} /></View>
+                  <View style={styles.flex}><GameButton label={mode === 'discard' ? "Suggest Discard" : "Suggest Best Hand"} icon="bulb-outline" variant="ghost" compact onPress={() => setSelected(mode === 'discard' ? suggestEmpireDiscard(run) : suggestEmpireHand(run))} /></View>
                   <View style={styles.flex}><GameButton label="Clear Selection" icon="close-outline" variant="ghost" compact disabled={!selected.length} onPress={() => setSelected([])} /></View>
                 </View>
                 <Text style={styles.note}>Play up to {run.quarter >= 5 ? 4 : 3} hands to reach the target. Discard up to 4 cards per discard action. No timer.</Text>
@@ -186,8 +200,15 @@ export default function EmpireCardsScreen() {
                 {run.offers.map((offer, index) => {
                   const title = offer.kind === 'advisor' ? ADVISOR_MAP[offer.id]?.name : offer.kind === 'upgrade' ? (COMBO_MAP[offer.id]?.name + ' Training') : CARD_MAP[offer.id]?.name;
                   const description = offer.kind === 'advisor' ? ADVISOR_MAP[offer.id]?.description : offer.kind === 'upgrade' ? 'Increase this combination multiplier by +0.25.' : 'Add one copy of this card to your deck.';
+                  const rarity = offer.kind === 'advisor' ? ADVISOR_MAP[offer.id]?.rarity : null;
                   return <View key={index} style={styles.offer}>
-                    <View style={styles.flex}><Text style={styles.title}>{title}</Text><Text style={styles.note}>{description}</Text></View>
+                    <View style={styles.flex}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <Text style={styles.title}>{title}</Text>
+                        {rarity && <Text style={[styles.rarityLabel, { color: rarity === 'rare' ? Colors.premium : rarity === 'uncommon' ? Colors.info : Colors.textMuted }]}>{rarity.toUpperCase()}</Text>}
+                      </View>
+                      <Text style={styles.note}>{description}</Text>
+                    </View>
                     <GameButton label={offer.cost + ' Capital'} compact disabled={run.capital < offer.cost || (offer.kind === 'advisor' && run.advisors.length >= 4 && !replacementAdvisor)} onPress={() => { update(r => buyEmpireOffer(r, index, replacementAdvisor ?? undefined)); setReplacementAdvisor(null); }} />
                   </View>;
                 })}
@@ -284,6 +305,12 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   flex: { flex: 1 },
   offer: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  rarityLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.4 },
+  difficultyContext: { color: Colors.textMuted, fontSize: 11, marginBottom: 8 },
+  difficultyRow: { flexDirection: 'row', gap: 6, marginVertical: 10 },
+  difficultyChoice: { flex: 1, borderRadius: 8, borderWidth: 1, borderColor: Colors.cardBorder, backgroundColor: Colors.elevated, padding: 8 },
+  difficultyActive: { borderColor: Colors.primary, borderWidth: 2 },
+  difficultyTitle: { color: Colors.textPrimary, fontSize: 12, fontWeight: '800' },
   shopPanel: { marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.cardBorder },
   departmentChip: { backgroundColor: Colors.elevated, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: Colors.cardBorder },
   departmentChipActive: { borderColor: Colors.primary },
