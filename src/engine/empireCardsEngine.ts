@@ -10,8 +10,17 @@ export interface Boss { id: string; name: string; description: string }
 export interface Quarter { name: string; target: number }
 export type Offer = { kind: 'advisor' | 'upgrade' | 'card'; id: string; cost: number };
 export type EmpirePhase = 'play' | 'shop' | 'won' | 'lost';
+export type EmpireDifficulty = 'standard' | 'advanced' | 'tycoon';
+export const EMPIRE_DIFFICULTIES: Record<EmpireDifficulty, { label: string; multiplier: number; description: string }> = {
+  standard: { label: 'Standard', multiplier: 1, description: 'Balanced eight-quarter run' },
+  advanced: { label: 'Advanced', multiplier: 1.12, description: '+12% score targets' },
+  tycoon: { label: 'Tycoon', multiplier: 1.25, description: '+25% score targets' },
+};
+
 export interface EmpireRun {
   version: 1;
+  /** Missing on older saves; defaults to Standard without migration. */
+  difficulty?: EmpireDifficulty;
   seed: number;
   quarter: number;
   phase: EmpirePhase;
@@ -132,20 +141,24 @@ function makeOffers(run: EmpireRun): EmpireRun {
     offers.push({ kind: 'advisor', id: advisor.id, cost: advisor.rarity === 'rare' ? 9 : advisor.rarity === 'uncommon' ? 7 : 5 });
   }
   seed = randomStep(seed);
-  offers.push({ kind: 'upgrade', id: EMPIRE_COMBOS[Math.floor(seed / 4294967296 * EMPIRE_COMBOS.length)].id, cost: 6 });
+  // Do not sell an already-maxed combination upgrade.
+  const trainable = EMPIRE_COMBOS.filter(c => (run.upgrades[c.id] ?? 0) < 4);
+  if (trainable.length) {
+    offers.push({ kind: 'upgrade', id: trainable[Math.floor(seed / 4294967296 * trainable.length)].id, cost: 6 });
+  }
   seed = randomStep(seed);
   // Draft a stronger card instead of diluting the deck with a random low-value copy.
   const potential = EMPIRE_CARDS.filter(c => c.points >= 28);
   offers.push({ kind: 'card', id: potential[Math.floor(seed / 4294967296 * potential.length)].id, cost: 4 });
   return { ...run, offers, seed };
 }
-export function createEmpireRun(seed = Date.now() >>> 0): EmpireRun {
+export function createEmpireRun(seed = Date.now() >>> 0, difficulty: EmpireDifficulty = 'standard'): EmpireRun {
   const normalized = (seed >>> 0) || 1;
   let deck: string[], newSeed: number;
   [deck, newSeed] = shuffled(EMPIRE_CARDS.map(c => c.id), normalized);
   const [bosses, bossSeed] = shuffled(EMPIRE_BOSSES.map(b => b.id), newSeed);
   return pull({
-    version: 1, seed: bossSeed, quarter: 1, phase: 'play', score: 0,
+    version: 1, difficulty, seed: bossSeed, quarter: 1, phase: 'play', score: 0,
     handsLeft: 3, discardsLeft: 2, capital: 0, deck, hand: [], discarded: [],
     advisors: [], upgrades: {}, bosses: bosses.slice(0, 3),
     offers: [], lastMessage: 'Select up to 4 cards, then Play Hand.', lastHandScore: 0, totalHandsPlayed: 0, retiredCards: 0, lastComboId: null,
@@ -157,7 +170,8 @@ export function currentBoss(run: EmpireRun): Boss | null {
 }
 export function quarterTarget(run: EmpireRun): number {
   const target = EMPIRE_QUARTERS[run.quarter - 1]?.target ?? EMPIRE_QUARTERS[7].target;
-  return currentBoss(run)?.id === 'inflation' ? Math.ceil(target * 1.2) : target;
+  const difficulty = EMPIRE_DIFFICULTIES[run.difficulty ?? 'standard'] ?? EMPIRE_DIFFICULTIES.standard;
+  return Math.ceil(target * (currentBoss(run)?.id === 'inflation' ? 1.2 : 1) * difficulty.multiplier);
 }
 export function findEmpireCombo(cards: EmpireCard[]): Combo | null {
   const n = cards.length;
@@ -263,6 +277,16 @@ export function suggestEmpireHand(run: EmpireRun): number[] {
   if (best.length === 0) return run.hand.map((_, i) => i).slice(0, 4);
   return best;
 }
+/** Non-destructive hint: replace cards not belonging to the strongest four-card hand.
+ * Never discards a currently strong card, and never takes an action for the player. */
+export function suggestEmpireDiscard(run: EmpireRun): number[] {
+  if (run.phase !== 'play' || run.discardsLeft < 1 || run.hand.length < 5) return [];
+  const keep = new Set(suggestEmpireHand(run));
+  const candidates = run.hand.map((_, index) => index).filter(index => !keep.has(index));
+  // Only propose replacing three outside cards if the draw pile can replenish them.
+  const available = run.deck.length + run.discarded.length;
+  return candidates.slice(0, Math.min(3, available));
+}
 export function playEmpireHand(run: EmpireRun, indices: number[]): EmpireRun {
   if (run.phase !== 'play' || run.handsLeft <= 0 || indices.length < 1 || indices.length > 4) return run;
   if (new Set(indices).size !== indices.length || indices.some(i => !Number.isInteger(i) || i < 0 || i >= run.hand.length)) return run;
@@ -296,6 +320,7 @@ export function buyEmpireOffer(run: EmpireRun, index: number, replaceAdvisorId?:
   if (run.phase !== 'shop') return run;
   const offer = run.offers[index];
   if (!offer || run.capital < offer.cost) return run;
+  if (offer.kind === 'upgrade' && (run.upgrades[offer.id] ?? 0) >= 4) return run;
   if (offer.kind === 'advisor') {
     if (run.advisors.includes(offer.id)) return run;
     if (run.advisors.length >= 4 && (!replaceAdvisorId || !run.advisors.includes(replaceAdvisorId))) return run;
@@ -357,7 +382,9 @@ export function nextEmpireQuarter(run: EmpireRun): EmpireRun {
 export function isEmpireRun(value: unknown): value is EmpireRun {
   if (!value || typeof value !== 'object') return false;
   const r = value as Partial<EmpireRun>;
-  return r.version === 1 && Number.isInteger(r.quarter) && (r.quarter ?? 0) >= 1 && (r.quarter ?? 0) <= 8
+  return r.version === 1
+    && (r.difficulty === undefined || r.difficulty in EMPIRE_DIFFICULTIES)
+    && Number.isInteger(r.quarter) && (r.quarter ?? 0) >= 1 && (r.quarter ?? 0) <= 8
     && ['play', 'shop', 'won', 'lost'].includes(r.phase as string)
     && Number.isInteger(r.seed) && typeof r.capital === 'number' && typeof r.score === 'number'
     && Array.isArray(r.deck) && Array.isArray(r.hand) && Array.isArray(r.discarded)
