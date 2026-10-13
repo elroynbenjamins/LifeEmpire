@@ -7,9 +7,20 @@ This document records the initial release balance and implementation goals for *
 - 32 starting cards: 8 each of Sales, Operations, Finance, Innovation.
 - 15 CEO Advisors; four active Advisor slots.
 - 8 business combinations; only the best fitting combination scores per hand.
-- 8 quarters; a run has no time limit and saves locally per Life Empire save slot.
+- 8 quarters; a run has no time limit. In-save play keeps separate local progress per Life Empire save slot; standalone play has its own independent local progress.
 - 6 possible boss conditions; three distinct bosses appear during quarters 3, 6, and 8.
 - Run Capital is **not** personal cash/gems/weekly game time. No main-game economy rewards are wired yet.
+
+## Two ways to play (2026-10-13)
+
+- **From a Life Empire save:** the existing dashboard entry continues the save-slot-specific Empire Cards run, cosmetic medals and tutorial preferences.
+- **From the main menu:** the Empire Cards entry opens **Standalone Mode**, even when the player has no Life Empire life save. No profile initialization, career progression, or weekly ticks are needed.
+- Standalone data uses `life-empire-cards:v1:standalone`, `life-empire-cards-medals:v1:standalone`, and `life-empire-cards-tutorial:v1:standalone`. Saved-slot keys remain unchanged: `...:slot:0`, `...:slot:1`, `...:slot:2`.
+- These two modes **do not merge runs, achievements or tutorial progress**. This prevents accidental loss or overwriting of existing save-slot games.
+- Both are local to the device in the current implementation. Account/cloud synchronization is a separate future decision.
+- Back from main-menu standalone play returns to the main menu rather than opening an uninitialized life save.
+
+Tests: `src/engine/__tests__/empireCardsStandalone.test.ts`, `src/components/__tests__/MainMenuStandaloneCards.test.tsx`.
 
 ## Quarter curve
 
