@@ -175,7 +175,17 @@ export function findEmpireCombo(cards: EmpireCard[]): Combo | null {
   if (sorted[0] >= 2) return match('partnership');
   return null;
 }
-export interface ScorePreview { points: number; base: number; multiplier: number; combo: Combo | null; boss: Boss | null }
+export interface ScorePreview {
+  points: number;
+  base: number;
+  multiplier: number;
+  combo: Combo | null;
+  boss: Boss | null;
+  /** Which owned Advisors actually contributed to this hand. */
+  activeAdvisorIds: string[];
+  /** A warning is shown when an Advisor applies a negative modifier. */
+  advisorWarning: string | null;
+}
 export function previewEmpireHand(run: EmpireRun, indices: number[]): ScorePreview {
   const unique = [...new Set(indices)].filter(i => Number.isInteger(i) && i >= 0 && i < run.hand.length).slice(0, 4);
   const cards = unique.map(i => CARD_BY_ID[run.hand[i]]).filter((c): c is EmpireCard => Boolean(c));
@@ -211,7 +221,25 @@ export function previewEmpireHand(run: EmpireRun, indices: number[]): ScorePrevi
   if (has('lab') && counts.sales && counts.innovation) multiplier *= 1.3;
   if (has('family') && combo?.id === 'diversified') multiplier *= 1.5;
   if (has('mergers') && combo?.id === 'venture') multiplier *= 1.65;
-  return { points: Math.round(base * multiplier), base: Math.round(base), multiplier, combo, boss };
+  const activeAdvisorIds = run.advisors.filter(id => cards.length > 0 && (
+    (id === 'brand' && counts.sales > 0)
+    || (id === 'operator' && counts.operations > 0)
+    || (id === 'cfo' && counts.finance > 0)
+    || (id === 'rnd' && counts.innovation > 0)
+    || (id === 'franchise' && counts.sales >= 2)
+    || (id === 'lean' && counts.operations >= 2)
+    || (id === 'venture')
+    || (id === 'lab' && counts.sales > 0 && counts.innovation > 0)
+    || (id === 'family' && combo?.id === 'diversified')
+    || (id === 'logistics' && counts.sales > 0 && counts.operations > 0)
+    || (id === 'digital' && counts.innovation > 0 && counts.sales > 0)
+    || (id === 'mergers' && combo?.id === 'venture')
+    || (id === 'trainer')
+    || (id === 'crisis' && boss !== null)
+  ));
+  const advisorWarning = has('venture') && cards.length > 0 && counts.finance === 0
+    ? 'Venture Capitalist: no Finance card (×0.90 penalty)' : null;
+  return { points: Math.round(base * multiplier), base: Math.round(base), multiplier, combo, boss, activeAdvisorIds, advisorWarning };
 }
 /** Choose the strongest currently playable hand. A suggestion, never an automatic spend. */
 export function suggestEmpireHand(run: EmpireRun): number[] {
