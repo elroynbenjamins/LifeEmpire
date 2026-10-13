@@ -19,13 +19,14 @@ import {
   EMPIRE_ADVISORS, EMPIRE_BOSSES, EMPIRE_CARDS, EMPIRE_COMBOS, EMPIRE_QUARTERS, EMPIRE_DIFFICULTIES, EmpireDifficulty, EmpireChallengeId,
   EmpireRun, buyEmpireOffer, createEmpireRun, currentBoss, discardEmpireCards,
   isEmpireRun, nextEmpireQuarter, playEmpireHand, previewEmpireHand,
-  quarterTarget, rerollEmpireShop, retireEmpireCard, suggestEmpireHand, suggestEmpireDiscard, trainEmpireCombo,
+  quarterTarget, rerollEmpireShop, retireEmpireCard, trainEmpireCombo,
  } from '../src/engine/empireCardsEngine';
 import {
   EMPIRE_ACHIEVEMENTS, EMPIRE_CHALLENGES, EmpireMedalProfile,
   emptyEmpireMedals, readEmpireMedals, applyEmpireMedalProgress,
   reconcileEmpireMedals, activeEmpireChallenge, empireChallengeProgress,
 } from '../src/engine/empireCardsMedals';
+import { getEmpireStrategyHint } from '../src/engine/empireCardsHints';
 
 const CARD_MAP = Object.fromEntries(EMPIRE_CARDS.map(c => [c.id, c]));
 const ADVISOR_MAP = Object.fromEntries(EMPIRE_ADVISORS.map(a => [a.id, a]));
@@ -49,7 +50,7 @@ export default function EmpireCardsScreen() {
   const [medalsTab, setMedalsTab] = useState<'achievements' | 'challenges'>('achievements');
   const [recentMedal, setRecentMedal] = useState<string | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
-  const [hintMode, setHintMode] = useState<'play' | 'discard' | null>(null);
+  const [showStrategyHint, setShowStrategyHint] = useState(false);
   const [mode, setMode] = useState<'play' | 'discard'>('play');
   const [showGuide, setShowGuide] = useState(false);
   const [startDifficulty, setStartDifficulty] = useState<EmpireDifficulty>('standard');
@@ -65,7 +66,7 @@ export default function EmpireCardsScreen() {
     medalsRef.current = emptyEmpireMedals();
     setMedals(medalsRef.current);
     setSelected([]);
-    setHintMode(null);
+    setShowStrategyHint(false);
     setReplacementAdvisor(null);
     setRecentMedal(null);
     // Wait for both files before permitting writes, especially on save-slot changes.
@@ -130,18 +131,17 @@ export default function EmpireCardsScreen() {
       if (next !== previous) commitRun(next);
     }
     setSelected([]);
-    setHintMode(null);
+    setShowStrategyHint(false);
     setMode('play');
   };
   const beginRun = (difficulty: EmpireDifficulty, challengeId?: EmpireChallengeId) => {
     commitRun(createEmpireRun(Date.now() >>> 0, difficulty, challengeId));
     setSelected([]);
-    setHintMode(null);
+    setShowStrategyHint(false);
     setMode('play');
     setMedalsOpen(false);
   };
   const select = (index: number) => {
-    setHintMode(null);
     setSelected(current => current.includes(index)
       ? current.filter(i => i !== index)
       : current.length < 4 ? [...current, index] : current);
@@ -159,6 +159,7 @@ export default function EmpireCardsScreen() {
   const target = run ? quarterTarget(run) : 0;
   const quarter = run ? EMPIRE_QUARTERS[run.quarter - 1] : null;
   const activeChallenge = run ? activeEmpireChallenge(run) : null;
+  const strategyHint = run && run.phase === 'play' ? getEmpireStrategyHint(run, mode) : null;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -240,8 +241,6 @@ export default function EmpireCardsScreen() {
                         key={index + ':' + id}
                         card={card}
                         selected={selected.includes(index)}
-                        suggested={hintMode === 'play' && selected.includes(index)}
-                        discardSuggested={hintMode === 'discard' && selected.includes(index)}
                         bossAffected={isEmpireCardBossAffected(card, boss, run.advisors.includes('crisis'))}
                         columns={handColumns}
                         reduceMotion={reduceMotion}
@@ -266,23 +265,27 @@ export default function EmpireCardsScreen() {
                   {mode === 'play' ? (
                     <>
                       <View style={styles.flex}><GameButton label="Play Hand" compact icon="play" disabled={!selected.length} onPress={() => update(r => playEmpireHand(r, selected))} /></View>
-                      <View style={styles.flex}><GameButton label="Discard Mode" compact variant="secondary" icon="refresh-outline" disabled={run.discardsLeft === 0} onPress={() => { setSelected([]); setHintMode(null); setMode('discard'); }} /></View>
+                      <View style={styles.flex}><GameButton label="Discard Mode" compact variant="secondary" icon="refresh-outline" disabled={run.discardsLeft === 0} onPress={() => { setSelected([]); setShowStrategyHint(false); setMode('discard'); }} /></View>
                     </>
                   ) : (
                     <>
                       <View style={styles.flex}><GameButton label="Replace Cards" compact disabled={!selected.length} onPress={() => update(r => discardEmpireCards(r, selected))} /></View>
-                      <View style={styles.flex}><GameButton label="Cancel" compact variant="secondary" onPress={() => { setSelected([]); setHintMode(null); setMode('play'); }} /></View>
+                      <View style={styles.flex}><GameButton label="Cancel" compact variant="secondary" onPress={() => { setSelected([]); setShowStrategyHint(false); setMode('play'); }} /></View>
                     </>
                   )}
                 </View>
                 <View style={styles.actionRow}>
-                  <View style={styles.flex}><GameButton label={mode === 'discard' ? "Suggest Discard" : "Suggest Best Hand"} icon="bulb-outline" variant="ghost" compact onPress={() => { setSelected(mode === 'discard' ? suggestEmpireDiscard(run) : suggestEmpireHand(run)); setHintMode(mode); }} /></View>
-                  <View style={styles.flex}><GameButton label="Clear Selection" icon="close-outline" variant="ghost" compact disabled={!selected.length} onPress={() => { setSelected([]); setHintMode(null); }} /></View>
+                  <View style={styles.flex}><GameButton label={showStrategyHint ? 'Hide Hint' : 'Strategy Hint'} icon="bulb-outline" variant="ghost" compact onPress={() => setShowStrategyHint(!showStrategyHint)} /></View>
+                  <View style={styles.flex}><GameButton label="Clear Selection" icon="close-outline" variant="ghost" compact disabled={!selected.length} onPress={() => setSelected([])} /></View>
                 </View>
+                {showStrategyHint && strategyHint && <View style={styles.strategyHint}>
+                  <Text style={styles.hintTitle}>{strategyHint.title}</Text>
+                  <Text style={styles.description}>{strategyHint.advice}</Text>
+                  <Text style={styles.note}>{strategyHint.context}</Text>
+                  <Text style={styles.note}>A hint never selects, plays or discards cards for you.</Text>
+                </View>}
                 <Text style={styles.note}>
-                  {hintMode === 'play' ? '★ Suggested cards are selected. You still choose when to play.' :
-                    hintMode === 'discard' ? '↻ Dashed cards are suggested for replacement. Nothing is discarded automatically.' :
-                    'CORE 20–24 · GROWTH 26–30 · FLAGSHIP 32–34 points. These are visual tiers, not rarity.'}
+                  CORE 20–24 · GROWTH 26–30 · FLAGSHIP 32–34 points. These are visual tiers, not rarity.
                   {boss && !run.advisors.includes('crisis') ? ' ⚠ marks cards weakened by this boss.' : ''}
                 </Text>
                 <Text style={styles.note}>Play up to {run.quarter >= 5 ? 4 : 3} hands to reach the target. Discard up to 4 cards per discard action. No timer.</Text>
@@ -463,6 +466,8 @@ const styles = StyleSheet.create({
   cardDept: { color: Colors.textMuted, fontSize: 8, fontWeight: '700' },
   cardPoints: { color: Colors.textPrimary, fontSize: 11, fontWeight: '800' },
   preview: { backgroundColor: Colors.elevated, padding: 10, borderRadius: 8, marginTop: 11, marginBottom: 9 },
+  strategyHint: { borderLeftWidth: 3, borderLeftColor: Colors.info, backgroundColor: Colors.elevated, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, marginTop: 6 },
+  hintTitle: { color: Colors.textPrimary, fontSize: 12, fontWeight: '800', marginBottom: 4 },
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   flex: { flex: 1 },
   offer: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
