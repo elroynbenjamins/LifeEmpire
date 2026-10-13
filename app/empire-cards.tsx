@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, BackHandler, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import ScreenHeader from '../src/components/ScreenHeader';
 import GameButton from '../src/components/GameButton';
 import GameCard from '../src/components/GameCard';
@@ -28,6 +28,7 @@ import {
   reconcileEmpireMedals, activeEmpireChallenge, empireChallengeProgress,
 } from '../src/engine/empireCardsMedals';
 import { getEmpireStrategyHint } from '../src/engine/empireCardsHints';
+import { getEmpireCardsStorageKeys } from '../src/engine/empireCardsStorage';
 import {
   EMPIRE_TUTORIAL_STEPS, EmpireTutorialProgress, EmpireContextTip,
   emptyEmpireTutorialProgress, readEmpireTutorialProgress, markEmpireTutorialSeen,
@@ -41,13 +42,17 @@ const DEPARTMENT_ICONS: Record<string, string> = { sales: '📣', operations: '�
 
 export default function EmpireCardsScreen() {
   const router = useRouter();
+  const { mode: entryMode, from: entryFrom } = useLocalSearchParams<{ mode?: string; from?: string }>();
+  const isStandalone = entryMode === 'standalone';
+  const fromMainMenu = isStandalone && entryFrom === 'main-menu';
   const reduceMotion = useEmpireReducedMotion();
   const { width: viewportWidth } = useWindowDimensions();
   const handColumns: 3 | 4 = viewportWidth < 380 ? 3 : 4;
   const activeSlot = useGameStore(s => s.activeSlot ?? 0);
-  const storageKey = 'life-empire-cards:v1:slot:' + activeSlot;
-  const medalsKey = 'life-empire-cards-medals:v1:slot:' + activeSlot;
-  const tutorialKey = 'life-empire-cards-tutorial:v1:slot:' + activeSlot;
+  const storageKeys = getEmpireCardsStorageKeys(isStandalone ? 'standalone' : 'save', activeSlot);
+  const storageKey = storageKeys.run;
+  const medalsKey = storageKeys.medals;
+  const tutorialKey = storageKeys.tutorial;
   const [readyKey, setReadyKey] = useState<string | null>(null);
   const [run, setRun] = useState<EmpireRun | null>(null);
   const runRef = useRef<EmpireRun | null>(null);
@@ -69,6 +74,23 @@ export default function EmpireCardsScreen() {
   const [shopPanel, setShopPanel] = useState<'offers' | 'training' | 'retire'>('offers');
   const [retireDepartment, setRetireDepartment] = useState<'sales' | 'operations' | 'finance' | 'innovation'>('sales');
   const [replacementAdvisor, setReplacementAdvisor] = useState<string | null>(null);
+  const goBack = () => {
+    if (fromMainMenu) {
+      // MainMenu is a full-screen modal. Restore it when leaving standalone play.
+      router.replace('/tabs');
+      useGameStore.setState({ showMainMenu: true });
+    } else {
+      router.back();
+    }
+  };
+  useEffect(() => {
+    if (!fromMainMenu) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      goBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [fromMainMenu, router]);
   useEffect(() => {
     let active = true;
     setReadyKey(null);
@@ -230,7 +252,7 @@ export default function EmpireCardsScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <ScreenHeader title="Empire Cards" subtitle="Business strategy · No timer" onBack={() => router.back()} showBack accentColor={Colors.business} showHud={false} />
+      <ScreenHeader title="Empire Cards" subtitle={isStandalone ? 'Standalone · No life save needed' : 'Business strategy · No timer'} onBack={goBack} showBack accentColor={Colors.business} showHud={false} />
       {readyKey === storageKey && guideStep !== null && <EmpireCardsCoach
         step={EMPIRE_TUTORIAL_STEPS[guideStep]}
         focusAvailable={!!run && (guideStep < 5 ? run.phase === 'play'
@@ -252,7 +274,9 @@ export default function EmpireCardsScreen() {
                 <Text style={styles.fact}>8 combinations</Text><Text style={styles.fact}>8 quarters</Text>
                 <Text style={styles.fact}>6 boss effects</Text>
               </View>
-              <Text style={styles.note}>An entire run uses separate Run Capital. It does not change your personal cash, gems or weekly progress.</Text>
+              <Text style={styles.note}>{isStandalone
+                ? 'Standalone runs, medals and tutorials are saved separately from all Life Empire save slots. No main-game resources are used.'
+                : 'An entire run uses separate Run Capital. It does not change your personal cash, gems or weekly progress.'}</Text>
               <Text style={styles.title}>Choose challenge</Text>
               <View style={styles.difficultyRow}>
                 {(Object.keys(EMPIRE_DIFFICULTIES) as EmpireDifficulty[]).map(id => (
@@ -293,7 +317,7 @@ export default function EmpireCardsScreen() {
               <View style={styles.stat}><Text style={styles.statLabel}>CAPITAL</Text><Text style={styles.statValue}>{run.capital}</Text></View>
               <View style={styles.stat}><Text style={styles.statLabel}>ADVISORS</Text><Text style={styles.statValue}>{run.advisors.length}/4</Text></View>
             </View>
-            <Text style={styles.difficultyContext}>{EMPIRE_DIFFICULTIES[run.difficulty ?? 'standard']?.label ?? 'Standard'} difficulty · Targets adjust by difficulty only</Text>
+            <Text style={styles.difficultyContext}>{isStandalone ? 'Standalone · ' : ''}{EMPIRE_DIFFICULTIES[run.difficulty ?? 'standard']?.label ?? 'Standard'} difficulty · Targets adjust by difficulty only</Text>
             {activeChallenge && <View style={styles.challengeStatus}>
               <Text style={styles.challengeStatusTitle}>{activeChallenge.icon} {activeChallenge.name} {run.challengeCompleted ? '✓' : ''}</Text>
               <Text style={styles.note}>{run.challengeCompleted ? 'Challenge medal earned for this run' : activeChallenge.description + ' · ' + empireChallengeProgress(run) + '/' + activeChallenge.target}</Text>
