@@ -78,8 +78,12 @@ describe('Empire Cards full-run specialization benchmark', () => {
     for (const item of summary) {
       expect(item.reached[1]).toBeGreaterThan(60);
       expect(item.averageQuartersCleared).toBeGreaterThan(2);
-      expect(item.wins).toBeGreaterThanOrEqual(0);
+      // Every strategy should have a viable route to an eight-quarter victory.
+      expect(item.wins).toBeGreaterThanOrEqual(20);
     }
+    const wins = summary.map(item => item.wins);
+    // Allow meaningful asymmetry, but don't regress to a single mandatory build.
+    expect(Math.max(...wins) - Math.min(...wins)).toBeLessThanOrEqual(50);
     expect(summary).toHaveLength(5);
   });
 });
