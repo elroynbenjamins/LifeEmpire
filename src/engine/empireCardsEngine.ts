@@ -46,21 +46,21 @@ export const EMPIRE_CARDS: EmpireCard[] = CARD_GROUPS.flatMap(({ department, nam
 const CARD_BY_ID: Record<string, EmpireCard> = Object.fromEntries(EMPIRE_CARDS.map(c => [c.id, c]));
 
 export const EMPIRE_ADVISORS: Advisor[] = [
-  { id: 'brand', name: 'Brand Manager', description: '+10 base points per Sales card.', rarity: 'common' },
-  { id: 'operator', name: 'Operations Lead', description: '+10 base points per Operations card.', rarity: 'common' },
-  { id: 'cfo', name: 'Chief Financial Officer', description: '+10 base points per Finance card.', rarity: 'common' },
-  { id: 'rnd', name: 'R&D Director', description: '+10 base points per Innovation card.', rarity: 'common' },
-  { id: 'franchise', name: 'Franchise Network', description: '×1.5 if you play 3+ Sales cards.', rarity: 'uncommon' },
-  { id: 'lean', name: 'Lean Operations', description: '+40 base points with 2+ Operations cards.', rarity: 'uncommon' },
-  { id: 'venture', name: 'Venture Capitalist', description: '×1.75 with Finance; otherwise ×0.8.', rarity: 'rare' },
-  { id: 'lab', name: 'Research Laboratory', description: '×1.5 with Sales + Innovation.', rarity: 'uncommon' },
-  { id: 'family', name: 'Family Holdings', description: '×1.75 for Diversified Empire.', rarity: 'rare' },
-  { id: 'tax', name: 'Tax Specialist', description: '+2 Run Capital after each quarter.', rarity: 'common' },
+  { id: 'brand', name: 'Brand Manager', description: '+12 base points per Sales card.', rarity: 'common' },
+  { id: 'operator', name: 'Operations Lead', description: '+12 base points per Operations card.', rarity: 'common' },
+  { id: 'cfo', name: 'Chief Financial Officer', description: '+12 base points per Finance card.', rarity: 'common' },
+  { id: 'rnd', name: 'R&D Director', description: '+12 base points per Innovation card.', rarity: 'common' },
+  { id: 'franchise', name: 'Franchise Network', description: '+15 base points with 2 Sales; ×1.7 with 3+ Sales.', rarity: 'uncommon' },
+  { id: 'lean', name: 'Lean Operations', description: '+55 base points with 2+ Operations cards.', rarity: 'uncommon' },
+  { id: 'venture', name: 'Venture Capitalist', description: '×1.35 with Finance; otherwise ×0.9.', rarity: 'rare' },
+  { id: 'lab', name: 'Research Laboratory', description: '×1.3 with Sales + Innovation.', rarity: 'uncommon' },
+  { id: 'family', name: 'Family Holdings', description: '×1.5 for Diversified Empire.', rarity: 'rare' },
+  { id: 'tax', name: 'Tax Specialist', description: '+4 Run Capital after each quarter.', rarity: 'common' },
   { id: 'logistics', name: 'Logistics Expert', description: '+30 base points with Sales + Operations.', rarity: 'common' },
   { id: 'digital', name: 'Digital Pioneer', description: '+25 base points with Innovation + Sales.', rarity: 'common' },
-  { id: 'mergers', name: 'M&A Attorney', description: '×1.4 for a Joint Venture.', rarity: 'uncommon' },
-  { id: 'trainer', name: 'Corporate Trainer', description: '+8 base points for every card played.', rarity: 'common' },
-  { id: 'crisis', name: 'Crisis Consultant', description: 'Ignores boss card penalties; +20 base points during boss quarters.', rarity: 'rare' },
+  { id: 'mergers', name: 'M&A Attorney', description: '×1.65 for a Joint Venture.', rarity: 'uncommon' },
+  { id: 'trainer', name: 'Corporate Trainer', description: '+5 base points for every card played.', rarity: 'common' },
+  { id: 'crisis', name: 'Crisis Consultant', description: 'Ignores boss card penalties; +45 base points during boss quarters.', rarity: 'rare' },
 ];
 
 export const EMPIRE_COMBOS: Combo[] = [
@@ -194,22 +194,23 @@ export function previewEmpireHand(run: EmpireRun, indices: number[]): ScorePrevi
   const combo = findEmpireCombo(cards);
   let multiplier = combo ? combo.multiplier + (run.upgrades[combo.id] ?? 0) * 0.25 : 1;
   const has = (id: string) => run.advisors.includes(id);
-  if (has('brand')) base += counts.sales * 10;
-  if (has('operator')) base += counts.operations * 10;
-  if (has('cfo')) base += counts.finance * 10;
-  if (has('rnd')) base += counts.innovation * 10;
-  if (has('lean') && counts.operations >= 2) base += 40;
+  if (has('brand')) base += counts.sales * 12;
+  if (has('operator')) base += counts.operations * 12;
+  if (has('cfo')) base += counts.finance * 12;
+  if (has('rnd')) base += counts.innovation * 12;
+  if (has('lean') && counts.operations >= 2) base += 55;
   if (has('logistics') && counts.sales && counts.operations) base += 30;
   if (has('digital') && counts.innovation && counts.sales) base += 25;
-  if (has('trainer')) base += cards.length * 8;
-  if (has('crisis') && boss) base += 20;
+  if (has('franchise') && counts.sales === 2) base += 15;
+  if (has('trainer')) base += cards.length * 5;
+  if (has('crisis') && boss) base += 45;
   // Antitrust caps combination upgrades, not independently purchased advisor effects.
   if (boss?.id === 'anti_trust' && !protectedFromBoss) multiplier = Math.min(2.25, multiplier);
-  if (has('franchise') && counts.sales >= 3) multiplier *= 1.5;
-  if (has('venture')) multiplier *= counts.finance ? 1.75 : 0.8;
-  if (has('lab') && counts.sales && counts.innovation) multiplier *= 1.5;
-  if (has('family') && combo?.id === 'diversified') multiplier *= 1.75;
-  if (has('mergers') && combo?.id === 'venture') multiplier *= 1.4;
+  if (has('franchise') && counts.sales >= 3) multiplier *= 1.7;
+  if (has('venture')) multiplier *= counts.finance ? 1.35 : 0.9;
+  if (has('lab') && counts.sales && counts.innovation) multiplier *= 1.3;
+  if (has('family') && combo?.id === 'diversified') multiplier *= 1.5;
+  if (has('mergers') && combo?.id === 'venture') multiplier *= 1.65;
   return { points: Math.round(base * multiplier), base: Math.round(base), multiplier, combo, boss };
 }
 /** Choose the strongest currently playable hand. A suggestion, never an automatic spend. */
@@ -248,7 +249,7 @@ export function playEmpireHand(run: EmpireRun, indices: number[]): EmpireRun {
   };
   if (next.score >= quarterTarget(next)) {
     if (next.quarter === EMPIRE_QUARTERS.length) return { ...next, phase: 'won', lastMessage: 'Empire completed! All eight quarters cleared.' };
-    const reward = 7 + next.handsLeft * 2 + (next.advisors.includes('tax') ? 2 : 0);
+    const reward = 7 + next.handsLeft * 2 + (next.advisors.includes('tax') ? 4 : 0);
     return makeOffers({ ...next, phase: 'shop', capital: next.capital + reward, lastMessage: 'Quarter cleared! +' + reward + ' Run Capital.' });
   }
   if (next.handsLeft === 0) return { ...next, phase: 'lost', lastMessage: 'The quarter target was not reached. Run over.' };
