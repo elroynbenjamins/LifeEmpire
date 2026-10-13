@@ -23,7 +23,7 @@ describe('Empire Cards optional challenges and fair shop limits', () => {
     const oldSave = { ...standard } as Record<string, unknown>;
     delete oldSave.difficulty;
     expect(isEmpireRun(oldSave)).toBe(true);
-    expect(quarterTarget(oldSave as ReturnType<typeof createEmpireRun>)).toBe(350);
+    expect(quarterTarget(oldSave as unknown as ReturnType<typeof createEmpireRun>)).toBe(350);
     expect(isEmpireRun({ ...standard, difficulty: null })).toBe(false);
     expect(isEmpireRun({ ...standard, difficulty: 'impossible' })).toBe(false);
   });
