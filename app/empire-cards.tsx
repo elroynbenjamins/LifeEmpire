@@ -145,6 +145,10 @@ export default function EmpireCardsScreen() {
                     <Text style={styles.title}>{mode === 'discard' ? selected.length + ' selected' : '+' + (preview?.points ?? 0).toLocaleString('en-US')}</Text>
                   </View>
                   {mode === 'play' && <Text style={styles.note}>Base {preview?.base ?? 0} × {(preview?.multiplier ?? 1).toFixed(2)} · Advisor effects included · {Math.max(0, target - run.score - (preview?.points ?? 0)).toLocaleString('en-US')} points still needed</Text>}
+                  {mode === 'play' && selected.length > 0 && (preview?.activeAdvisorIds.length ?? 0) > 0 && (
+                    <Text style={[styles.note, { color: Colors.primary }]}>Active Advisors: {preview?.activeAdvisorIds.map(id => ADVISOR_MAP[id]?.name ?? id).join(', ')}</Text>
+                  )}
+                  {mode === 'play' && preview?.advisorWarning && <Text style={[styles.note, { color: Colors.warning }]}>{preview.advisorWarning}</Text>}
                 </View>
                 <View style={styles.actionRow}>
                   {mode === 'play' ? (
