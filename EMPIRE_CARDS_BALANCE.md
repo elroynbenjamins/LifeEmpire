@@ -43,12 +43,12 @@ The Inflation boss raises its quarter target by 20%. The other bosses primarily 
 | --- | ---: | ---: | ---: |
 | Quarter 1 | 120 | 120 | 120 |
 | Quarter 2 | 118 | 120 | 120 |
-| Quarter 3 | 74 | 120 | 120 |
-| Quarter 4 | 38 | 120 | 120 |
-| Quarter 5 | 23 | 120 | 120 |
-| Quarter 6 | 4 | 104 | 113 |
-| Quarter 7 | 0 | 77 | 112 |
-| Quarter 8 | 0 | 32 | 88 |
+| Quarter 3 | 77 | 120 | 120 |
+| Quarter 4 | 39 | 120 | 120 |
+| Quarter 5 | 24 | 120 | 120 |
+| Quarter 6 | 3 | 104 | 112 |
+| Quarter 7 | 0 | 77 | 110 |
+| Quarter 8 | 0 | 33 | 80 |
 
 Scripted results are **not human player win rates**. These are regression benchmarks from `src/engine/__tests__/empireCardsBalance.test.ts` and should be rerun after any scoring, target, shop, or deck-size changes.
 
@@ -118,17 +118,43 @@ The `src/engine/__tests__/empireCardsArchetypes.test.ts` test uses 100 fixed see
 
 | Archetype | Wins out of 100 | Average quarters cleared |
 | --- | ---: | ---: |
-| Sales | 35 | 6.76 |
-| Operations | 34 | 6.68 |
-| Finance | 68 | 7.25 |
-| Innovation | 37 | 6.70 |
-| Diversified | 64 | 7.28 |
+| Sales | 34 | 6.68 |
+| Operations | 33 | 6.74 |
+| Finance | 62 | 7.10 |
+| Innovation | 38 | 6.78 |
+| Diversified | 66 | 7.29 |
 
 All five strategies are now viable, though Finance and Diversified remain easier in these particular scripted policies. Future passes should test conditional discard decisions, varied shop purchasing, and genuine player data before trying to equalize win rates further.
 
 ### Overall seeded benchmark, updated
 
-After raising specialized multipliers, the existing 120-seed comparison reached **32/120 guided final victories** and **88/120 strategic final victories**; the casual first-four bot still reached **0/120**. This corresponds to ~27% guided and ~73% strategic completions, but these are purely simulated outcomes.
+After a follow-up parity refinement, the existing 120-seed comparison reached **33/120 guided final victories** and **80/120 strategic final victories**; the casual first-four bot still reached **0/120**. This corresponds to 27.5% guided and 66.7% strategic completions, but these are purely simulated outcomes.
+
+## Small expansion and new controls (2026-10-13)
+
+The original 32 cards, 15 Advisors, 8 combinations, 8 quarters, and 6 possible bosses remain unchanged. The mode adds replay choices without introducing another economy:
+
+- **Standard**, **Advanced** (+12% target) and **Tycoon** (+25% target) difficulties. The difficulty is saved per run; existing `v1` runs without this field behave as Standard. Boss Inflation multiplies with the selected difficulty.
+- **Suggest Discard** recommends up to three cards outside the current strongest four-card hand, but players decide whether to discard. Replacing cards is a tactical choice that can improve the win rate.
+- A subtle hand-deal/replacement reveal adds ~185ms of fade/translate motion to the previous card-lift, score-pulse and quarter-transition animations. Reduced Motion disables all movement.
+- The random shop no longer sells an already maxed (level 4) combination training upgrade.
+- Advisor shop offers display rarity as a concise label rather than requiring new art.
+
+### 60-seed challenge and discard benchmark
+
+| Difficulty | No suggested discard | Cautious suggested discards |
+| --- | ---: | ---: |
+| Standard | 41/60 | 56/60 |
+| Advanced | 21/60 | 48/60 |
+| Tycoon | 13/60 | 23/60 |
+
+These numbers use a separate heuristic test pilot (`empireCardsChallengeBalance.test.ts`): best-hand suggestions, a fixed Advisor/shop priority, and optional discard when below target pace. They **do not** represent real-player victory probabilities. The extra difficulties can be skipped entirely, and no rewards are introduced.
+
+### Latest business parity follow-up
+
+To reduce the Finance/Diversified advantage, **Venture Capitalist** now gives ×1.30 with Finance and **Family Holdings** gives ×1.45 for Diversified. Joint Venture is ×2.45 and Diversified Empire ×2.55. The specialist bonuses are slightly stronger: Specialization ×2.80 and Supply Chain / Startup Accelerator / Market Expansion ×2.95.
+
+A 100-seed simulated full-run comparison now gives **34 Sales, 33 Operations, 62 Finance, 38 Innovation, and 66 Diversified wins**. All remain viable. Finance and Diversified still lead in this particular baseline; adjust further only if actual gameplay and larger sample testing confirm imbalance.
 
 ## Future work
 
