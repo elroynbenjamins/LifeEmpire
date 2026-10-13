@@ -8,6 +8,7 @@ import ScreenHeader from '../src/components/ScreenHeader';
 import GameButton from '../src/components/GameButton';
 import GameCard from '../src/components/GameCard';
 import EmpireCardTile from '../src/components/EmpireCardTile';
+import { EmpireCardsCoach, EmpireCardsContextCoach } from '../src/components/EmpireCardsCoach';
 import { EmpirePhaseReveal, EmpireScorePulse, useEmpireReducedMotion } from '../src/components/EmpireMotion';
 import { Colors } from '../src/theme/colors';
 import {
@@ -27,6 +28,11 @@ import {
   reconcileEmpireMedals, activeEmpireChallenge, empireChallengeProgress,
 } from '../src/engine/empireCardsMedals';
 import { getEmpireStrategyHint } from '../src/engine/empireCardsHints';
+import {
+  EMPIRE_TUTORIAL_STEPS, EmpireTutorialProgress, EmpireContextTip,
+  emptyEmpireTutorialProgress, readEmpireTutorialProgress, markEmpireTutorialSeen,
+  shouldShowEmpireIntro, getEmpireContextTip,
+} from '../src/engine/empireCardsTutorial';
 
 const CARD_MAP = Object.fromEntries(EMPIRE_CARDS.map(c => [c.id, c]));
 const ADVISOR_MAP = Object.fromEntries(EMPIRE_ADVISORS.map(a => [a.id, a]));
@@ -41,11 +47,16 @@ export default function EmpireCardsScreen() {
   const activeSlot = useGameStore(s => s.activeSlot ?? 0);
   const storageKey = 'life-empire-cards:v1:slot:' + activeSlot;
   const medalsKey = 'life-empire-cards-medals:v1:slot:' + activeSlot;
+  const tutorialKey = 'life-empire-cards-tutorial:v1:slot:' + activeSlot;
   const [readyKey, setReadyKey] = useState<string | null>(null);
   const [run, setRun] = useState<EmpireRun | null>(null);
   const runRef = useRef<EmpireRun | null>(null);
   const [medals, setMedals] = useState<EmpireMedalProfile>(emptyEmpireMedals);
   const medalsRef = useRef<EmpireMedalProfile>(emptyEmpireMedals());
+  const [tutorial, setTutorial] = useState<EmpireTutorialProgress>(emptyEmpireTutorialProgress);
+  const [guideStep, setGuideStep] = useState<number | null>(null);
+  const [manualReplay, setManualReplay] = useState(false);
+  const [contextTip, setContextTip] = useState<EmpireContextTip | null>(null);
   const [medalsOpen, setMedalsOpen] = useState(false);
   const [medalsTab, setMedalsTab] = useState<'achievements' | 'challenges'>('achievements');
   const [recentMedal, setRecentMedal] = useState<string | null>(null);
@@ -65,13 +76,17 @@ export default function EmpireCardsScreen() {
     setRun(null);
     medalsRef.current = emptyEmpireMedals();
     setMedals(medalsRef.current);
+    setTutorial(emptyEmpireTutorialProgress());
+    setGuideStep(null);
+    setManualReplay(false);
+    setContextTip(null);
     setSelected([]);
     setShowStrategyHint(false);
     setReplacementAdvisor(null);
     setRecentMedal(null);
     // Wait for both files before permitting writes, especially on save-slot changes.
-    Promise.all([AsyncStorage.getItem(storageKey), AsyncStorage.getItem(medalsKey)])
-      .then(([rawRun, rawMedals]) => {
+    Promise.all([AsyncStorage.getItem(storageKey), AsyncStorage.getItem(medalsKey), AsyncStorage.getItem(tutorialKey)])
+      .then(([rawRun, rawMedals, rawTutorial]) => {
         if (!active) return;
         let savedRun: EmpireRun | null = null;
         let savedMedals = emptyEmpireMedals();
@@ -83,15 +98,20 @@ export default function EmpireCardsScreen() {
           savedMedals = readEmpireMedals(rawMedals ? JSON.parse(rawMedals) : null);
         } catch { /* Invalid badge JSON cannot block game startup. */ }
         savedMedals = reconcileEmpireMedals(savedMedals, savedRun);
+        let savedTutorial = emptyEmpireTutorialProgress();
+        try {
+          savedTutorial = readEmpireTutorialProgress(rawTutorial ? JSON.parse(rawTutorial) : null);
+        } catch { /* Old or corrupt tutorial preferences never block loading. */ }
         runRef.current = savedRun;
         medalsRef.current = savedMedals;
         setRun(savedRun);
         setMedals(savedMedals);
+        setTutorial(savedTutorial);
         setReadyKey(storageKey);
       })
       .catch(() => { if (active) setReadyKey(storageKey); });
     return () => { active = false; };
-  }, [storageKey, medalsKey]);
+  }, [storageKey, medalsKey, tutorialKey]);
   useEffect(() => {
     // Never write the previous save slot's run into a newly selected slot.
     if (readyKey !== storageKey) return;
@@ -102,6 +122,46 @@ export default function EmpireCardsScreen() {
     if (readyKey !== storageKey) return;
     void AsyncStorage.setItem(medalsKey, JSON.stringify(medals)).catch(() => {});
   }, [readyKey, medals, medalsKey, storageKey]);
+  useEffect(() => {
+    if (readyKey !== storageKey) return;
+    void AsyncStorage.setItem(tutorialKey, JSON.stringify(tutorial)).catch(() => {});
+  }, [readyKey, tutorial, tutorialKey, storageKey]);
+
+  // First hand: five steps; shop and boss explanations wait until they appear.
+  useEffect(() => {
+    if (readyKey !== storageKey || guideStep !== null || contextTip !== null) return;
+    if (shouldShowEmpireIntro(run, tutorial)) {
+      setManualReplay(false);
+      setGuideStep(0);
+      return;
+    }
+    const tip = getEmpireContextTip(run, tutorial);
+    if (tip) setContextTip(tip);
+  }, [readyKey, storageKey, run, tutorial, guideStep, contextTip]);
+
+  const finishTutorial = (disableAll = false) => {
+    setTutorial(previous => markEmpireTutorialSeen(previous, disableAll ? 'all' : 'intro'));
+    setGuideStep(null);
+    setManualReplay(false);
+    setContextTip(null);
+  };
+  const advanceTutorial = () => {
+    const total = manualReplay ? EMPIRE_TUTORIAL_STEPS.length : 5;
+    if (guideStep === null) return;
+    if (guideStep + 1 >= total) finishTutorial();
+    else setGuideStep(guideStep + 1);
+  };
+  const replayTutorial = () => {
+    setContextTip(null);
+    setManualReplay(true);
+    setGuideStep(0);
+  };
+  const dismissContextTip = (disableAll = false) => {
+    if (contextTip) {
+      setTutorial(previous => markEmpireTutorialSeen(previous, disableAll ? 'all' : contextTip));
+    }
+    setContextTip(null);
+  };
 
   const commitRun = (next: EmpireRun | null) => {
     const previous = runRef.current;
@@ -128,7 +188,11 @@ export default function EmpireCardsScreen() {
     const previous = runRef.current;
     if (previous) {
       const next = transform(previous);
-      if (next !== previous) commitRun(next);
+      if (next !== previous) {
+        commitRun(next);
+        // If the player naturally advances, stop the intro rather than holding up gameplay.
+        if (guideStep !== null && !manualReplay && next.phase !== 'play') finishTutorial();
+      }
     }
     setSelected([]);
     setShowStrategyHint(false);
@@ -164,6 +228,15 @@ export default function EmpireCardsScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScreenHeader title="Empire Cards" subtitle="Business strategy · No timer" onBack={() => router.back()} showBack accentColor={Colors.business} showHud={false} />
+      {readyKey === storageKey && guideStep !== null && <EmpireCardsCoach
+        step={EMPIRE_TUTORIAL_STEPS[guideStep]}
+        index={guideStep} total={manualReplay ? EMPIRE_TUTORIAL_STEPS.length : 5}
+        onNext={advanceTutorial} onBack={() => setGuideStep(Math.max(0, guideStep - 1))}
+        onSkip={() => finishTutorial()} onDisable={() => finishTutorial(true)}
+      />}
+      {readyKey === storageKey && guideStep === null && contextTip && <EmpireCardsContextCoach
+        tip={contextTip} onDismiss={() => dismissContextTip()} onDisable={() => dismissContextTip(true)}
+      />}
       <ScrollView contentContainerStyle={styles.content}>
         {readyKey !== storageKey ? <Text style={styles.muted}>Loading saved run...</Text> : !run ? (
           <>
@@ -203,7 +276,10 @@ export default function EmpireCardsScreen() {
               <Text style={styles.note}>{EMPIRE_CHALLENGES.find(c => c.id === startChallenge)?.description ?? 'No extra objective. You can still earn permanent Empire Cards achievements.'}</Text>
               <GameButton label="Start Empire Cards" icon="play" onPress={() => beginRun(startDifficulty, startChallenge ?? undefined)} />
             </GameCard>
-            <GameButton label="How combinations work" icon="help-circle-outline" variant="secondary" onPress={() => setShowGuide(!showGuide)} />
+            <View style={styles.actionRow}>
+              <View style={styles.flex}><GameButton label="How to Play" icon="school-outline" compact variant="secondary" onPress={replayTutorial} /></View>
+              <View style={styles.flex}><GameButton label="Combinations" icon="book-outline" compact variant="secondary" onPress={() => setShowGuide(!showGuide)} /></View>
+            </View>
           </>
         ) : (
           <>
@@ -219,8 +295,9 @@ export default function EmpireCardsScreen() {
             </View>}
             {recentMedal && <Text style={styles.medalToast}>{recentMedal}</Text>}
             <EmpirePhaseReveal phaseKey={run.quarter + ':' + run.phase} reduceMotion={reduceMotion}>
-            <GameCard title={quarter?.name ?? 'Empire Cards'} eyebrow={boss ? 'BOSS QUARTER' : 'CURRENT QUARTER'} accentColor={boss ? Colors.warning : Colors.business}>
-              {boss && <View style={styles.boss}><Text style={styles.title}>{'⚠️ ' + boss.name}</Text><Text style={styles.description}>{boss.description}</Text></View>}
+            <GameCard title={quarter?.name ?? 'Empire Cards'} eyebrow={boss ? 'BOSS QUARTER' : 'CURRENT QUARTER'} accentColor={boss ? Colors.warning : Colors.business}
+              style={guideStep === 0 && run.phase === 'play' ? styles.tutorialFocus : undefined}>
+              {boss && <View style={[styles.boss, guideStep === 6 && styles.tutorialFocus]}><Text style={styles.title}>{'⚠️ ' + boss.name}</Text><Text style={styles.description}>{boss.description}</Text></View>}
               <View style={styles.scoreRow}>
                 <View><Text style={styles.statLabel}>TOTAL POINTS</Text><EmpireScorePulse value={run.totalHandsPlayed} reduceMotion={reduceMotion}><Text style={styles.bigScore}>{run.score.toLocaleString('en-US')}</Text></EmpireScorePulse></View>
                 <View style={styles.alignRight}><Text style={styles.statLabel}>TARGET</Text><Text style={styles.bigScore}>{target.toLocaleString('en-US')}</Text></View>
@@ -233,7 +310,7 @@ export default function EmpireCardsScreen() {
             {run.phase === 'play' && (
               <GameCard title="Your hand" eyebrow="SELECT UP TO 4" titleAccessory={<Text style={styles.muted}>{run.hand.length} cards</Text>}>
                 <EmpirePhaseReveal phaseKey={run.quarter + ':' + run.hand.join(',')} reduceMotion={reduceMotion}>
-                <View style={styles.cards}>
+                <View style={[styles.cards, guideStep === 1 && styles.tutorialFocus]}>
                   {run.hand.map((id, index) => {
                     const card = CARD_MAP[id];
                     return card ? (
@@ -250,7 +327,7 @@ export default function EmpireCardsScreen() {
                   })}
                 </View>
                 </EmpirePhaseReveal>
-                <View style={styles.preview}>
+                <View style={[styles.preview, guideStep === 2 && styles.tutorialFocus]}>
                   <View style={styles.scoreRow}>
                     <Text style={styles.description}>{mode === 'discard' ? 'Replace selected cards' : preview?.combo?.name ?? 'Basic Play'}</Text>
                     <Text style={styles.title}>{mode === 'discard' ? selected.length + ' selected' : '+' + (preview?.points ?? 0).toLocaleString('en-US')}</Text>
@@ -261,7 +338,7 @@ export default function EmpireCardsScreen() {
                   )}
                   {mode === 'play' && preview?.advisorWarning && <Text style={[styles.note, { color: Colors.warning }]}>{preview.advisorWarning}</Text>}
                 </View>
-                <View style={styles.actionRow}>
+                <View style={[styles.actionRow, guideStep === 3 && styles.tutorialFocus]}>
                   {mode === 'play' ? (
                     <>
                       <View style={styles.flex}><GameButton label="Play Hand" compact icon="play" disabled={!selected.length} onPress={() => update(r => playEmpireHand(r, selected))} /></View>
@@ -274,8 +351,8 @@ export default function EmpireCardsScreen() {
                     </>
                   )}
                 </View>
-                <View style={styles.actionRow}>
-                  <View style={styles.flex}><GameButton label={showStrategyHint ? 'Hide Hint' : 'Strategy Hint'} icon="bulb-outline" variant="ghost" compact onPress={() => setShowStrategyHint(!showStrategyHint)} /></View>
+                <View style={[styles.actionRow, guideStep === 4 && styles.tutorialFocus]}>
+                  <View style={styles.flex}><GameButton label={showStrategyHint ? 'Hide Hint' : 'Strategy Hint' icon="bulb-outline" variant="ghost" compact onPress={() => setShowStrategyHint(!showStrategyHint)} /></View>
                   <View style={styles.flex}><GameButton label="Clear Selection" icon="close-outline" variant="ghost" compact disabled={!selected.length} onPress={() => setSelected([])} /></View>
                 </View>
                 {showStrategyHint && strategyHint && <View style={styles.strategyHint}>
@@ -284,6 +361,7 @@ export default function EmpireCardsScreen() {
                   <Text style={styles.note}>{strategyHint.context}</Text>
                   <Text style={styles.note}>A hint never selects, plays or discards cards for you.</Text>
                 </View>}
+                {run.quarter === 1 && run.totalHandsPlayed === 0 && <Text style={styles.firstHandNote}>Try selecting 2–4 cards and watch the preview update. Nothing is played until you tap Play Hand.</Text>}
                 <Text style={styles.note}>
                   CORE 20–24 · GROWTH 26–30 · FLAGSHIP 32–34 points. These are visual tiers, not rarity.
                   {boss && !run.advisors.includes('crisis') ? ' ⚠ marks cards weakened by this boss.' : ''}
@@ -293,7 +371,8 @@ export default function EmpireCardsScreen() {
             )}
 
             {run.phase === 'shop' && (
-              <GameCard title="Investment Shop" eyebrow="QUARTER CLEARED" accentColor={Colors.primary}>
+              <GameCard title="Investment Shop" eyebrow="QUARTER CLEARED" accentColor={Colors.primary}
+                style={guideStep === 5 ? styles.tutorialFocus : undefined}>
                 <Text style={styles.description}>Spend Run Capital to strengthen this run, or save it for later. Purchased Advisors last until the run ends.</Text>
                 {run.advisors.length >= 4 && <View style={styles.shopPanel}>
                   <Text style={styles.description}>All four Advisor slots are full. To recruit another Advisor, first select an existing one to replace. Otherwise, keep your team.</Text>
@@ -392,9 +471,10 @@ export default function EmpireCardsScreen() {
               })}
             </GameCard>}
             <View style={styles.actionRow}>
-              <View style={styles.flex}><GameButton label="Combination Guide" icon="book-outline" compact variant="secondary" onPress={() => setShowGuide(!showGuide)} /></View>
-              <View style={styles.flex}><GameButton label="Restart Run" icon="refresh-outline" compact variant="ghost" onPress={restart} /></View>
+              <View style={styles.flex}><GameButton label="Combinations" icon="book-outline" compact variant="secondary" onPress={() => setShowGuide(!showGuide)} /></View>
+              <View style={styles.flex}><GameButton label="Replay Tutorial" icon="school-outline" compact variant="secondary" onPress={replayTutorial} /></View>
             </View>
+            <GameButton label="Restart Run" icon="refresh-outline" compact variant="ghost" onPress={restart} />
           </>
         )}
 
@@ -467,6 +547,8 @@ const styles = StyleSheet.create({
   cardPoints: { color: Colors.textPrimary, fontSize: 11, fontWeight: '800' },
   preview: { backgroundColor: Colors.elevated, padding: 10, borderRadius: 8, marginTop: 11, marginBottom: 9 },
   strategyHint: { borderLeftWidth: 3, borderLeftColor: Colors.info, backgroundColor: Colors.elevated, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, marginTop: 6 },
+  tutorialFocus: { borderWidth: 2, borderColor: Colors.business, borderRadius: 10 },
+  firstHandNote: { color: Colors.business, fontSize: 11, lineHeight: 16, marginTop: 7 },
   hintTitle: { color: Colors.textPrimary, fontSize: 12, fontWeight: '800', marginBottom: 4 },
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   flex: { flex: 1 },
