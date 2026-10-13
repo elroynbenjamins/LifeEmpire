@@ -17,9 +17,10 @@ const TIP_TEXT: Record<EmpireContextTip, { title: string; body: string }> = {
 
 /** A pinned, non-modal coach that leaves cards and buttons usable. */
 export function EmpireCardsCoach({
-  step, index, total, onBack, onNext, onSkip, onDisable,
+  step, index, total, onBack, onNext, onSkip, onDisable, focusAvailable = true,
 }: {
   step: EmpireTutorialStep;
+  focusAvailable?: boolean;
   index: number;
   total: number;
   onBack: () => void;
@@ -39,7 +40,7 @@ export function EmpireCardsCoach({
     </View>
     <Text style={styles.title}>{step.title}</Text>
     <Text style={styles.copy}>{step.text}</Text>
-    <Text style={styles.focus}>Look at: {step.focus}</Text>
+    <Text style={styles.focus}>{focusAvailable ? 'Look at: ' : 'You will see: '}{step.focus}</Text>
     <View style={styles.actions}>
       <Pressable accessibilityRole="button" accessibilityLabel="Do not show tutorial again"
         onPress={onDisable} style={styles.minorButton}>
