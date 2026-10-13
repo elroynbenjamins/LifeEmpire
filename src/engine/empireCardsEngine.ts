@@ -171,7 +171,7 @@ export function currentBoss(run: EmpireRun): Boss | null {
 export function quarterTarget(run: EmpireRun): number {
   const target = EMPIRE_QUARTERS[run.quarter - 1]?.target ?? EMPIRE_QUARTERS[7].target;
   const difficulty = EMPIRE_DIFFICULTIES[run.difficulty ?? 'standard'] ?? EMPIRE_DIFFICULTIES.standard;
-  return Math.ceil(target * (currentBoss(run)?.id === 'inflation' ? 1.2 : 1) * difficulty.multiplier);
+  return Math.ceil(Number((target * (currentBoss(run)?.id === 'inflation' ? 1.2 : 1) * difficulty.multiplier).toFixed(6)));
 }
 export function findEmpireCombo(cards: EmpireCard[]): Combo | null {
   const n = cards.length;
