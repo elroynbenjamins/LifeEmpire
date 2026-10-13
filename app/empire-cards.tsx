@@ -204,6 +204,9 @@ export default function EmpireCardsScreen() {
     setShowStrategyHint(false);
     setMode('play');
     setMedalsOpen(false);
+    setGuideStep(null);
+    setManualReplay(false);
+    setContextTip(null);
   };
   const select = (index: number) => {
     setSelected(current => current.includes(index)
@@ -230,6 +233,8 @@ export default function EmpireCardsScreen() {
       <ScreenHeader title="Empire Cards" subtitle="Business strategy · No timer" onBack={() => router.back()} showBack accentColor={Colors.business} showHud={false} />
       {readyKey === storageKey && guideStep !== null && <EmpireCardsCoach
         step={EMPIRE_TUTORIAL_STEPS[guideStep]}
+        focusAvailable={!!run && (guideStep < 5 ? run.phase === 'play'
+          : guideStep === 5 ? run.phase === 'shop' : !!boss)}
         index={guideStep} total={manualReplay ? EMPIRE_TUTORIAL_STEPS.length : 5}
         onNext={advanceTutorial} onBack={() => setGuideStep(Math.max(0, guideStep - 1))}
         onSkip={() => finishTutorial()} onDisable={() => finishTutorial(true)}
