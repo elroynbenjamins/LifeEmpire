@@ -166,9 +166,9 @@ describe('business budget engine', () => {
       inflationMultiplier: 1,
     });
 
-    // 10-week operating reserve = 100k, plus 200k existing earmarks.
-    expect(result.snapshot.extraDebtPaid).toBe(10_000);
-    expect(result.reserves.reinvestment).toBeGreaterThanOrEqual(100_000);
+    // Retired upkeep earmarks are released; the growth and operating reserves remain protected.
+    expect(result.snapshot.extraDebtPaid).toBe(55_000);
+    expect(result.reserves.reinvestment).toBe(0);
     expect(result.reserves.growth).toBeGreaterThanOrEqual(100_000);
   });
 
@@ -177,7 +177,7 @@ describe('business budget engine', () => {
     const targets = getBusinessBudgetReserveTargets(business, 100_000, 1);
 
     expect(targets.operatingReserveTarget).toBe(800_000);
-    expect(targets.reinvestmentReserveTarget).toBeGreaterThan(0);
+    expect(targets.reinvestmentReserveTarget).toBe(0);
     expect(targets.growthReserveTarget).toBe(800_000);
 
     const consumed = consumeBusinessBudgetReserve(
@@ -185,7 +185,7 @@ describe('business budget engine', () => {
       'growth',
       125_000,
     );
-    expect(consumed).toEqual({ reinvestment: 200_000, growth: 375_000 });
+    expect(consumed).toEqual({ reinvestment: 0, growth: 375_000 });
   });
 
   test('budget allocation never erases a negative business cash balance', () => {

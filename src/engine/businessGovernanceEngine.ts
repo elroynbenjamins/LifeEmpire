@@ -10,7 +10,7 @@ import {
 } from '../types/game';
 import { getBusinessDebtPrincipal } from './businessDebtEngine';
 import { getCorporateWorkforceEffects } from './businessWorkforceEngine';
-import { normalizeBusinessInsurancePolicies } from './businessInsuranceEngine';
+
 
 export const BOARD_GOVERNANCE_UNLOCK_VALUATION = 25_000_000;
 
@@ -99,7 +99,7 @@ export const BUSINESS_BOARD_MANDATES: Record<BusinessBoardMandate, {
   risk_committee: {
     mandate: 'risk_committee',
     label: 'Risk Committee',
-    description: 'Prioritize controls, resilience, insurance and regulatory discipline.',
+    description: 'Prioritize reliable operations and regulatory discipline.',
   },
 };
 
@@ -350,7 +350,7 @@ export function tickBusinessGovernance(
   const workforceEffects = getCorporateWorkforceEffects(business);
   const debt = getBusinessDebtPrincipal(business);
   const debtToValue = debt / Math.max(1, business.valuation ?? 1);
-  const policies = normalizeBusinessInsurancePolicies(business.insurancePolicies);
+
   const budgetReviewed = (business.budgetPlan?.reviewYear ?? business.foundedYear ?? currentYear) >= currentYear;
   const timelineEntries: Array<{ week: number; year: number; title: string; icon: string; kind: 'event' }> = [];
   const executives: BusinessExecutive[] = [];
@@ -381,8 +381,7 @@ export function tickBusinessGovernance(
         ? 0.06
         : workforceEffects.departmentRatios.sales < 0.75 ? -0.12 : 0;
     } else if (executive.role === 'general_counsel') {
-      delta += policies.liability && policies.liability !== 'none' ? 0.05 : -0.08;
-      delta += policies.cyber && policies.cyber !== 'none' ? 0.03 : -0.04;
+
       delta += workforceEffects.departmentRatios.support >= 0.95
         ? 0.05
         : workforceEffects.departmentRatios.support < 0.75 ? -0.10 : 0;

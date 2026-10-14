@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/theme/colors';
 import ScreenHeader from '../../src/components/ScreenHeader';
+import FeatureTourModal from '../../src/components/FeatureTourModal';
+import { useTutorialScreenBlocker } from '../../src/components/TutorialChapterLauncher';
 import SectorPill from '../../src/components/SectorPill';
 import useGameStore from '../../src/store/gameStore';
 import { formatCurrency, formatPercent } from '../../src/utils/format';
@@ -20,6 +22,9 @@ export default function MarketScreen() {
   const year = useGameStore((s) => s?.year ?? 1);
   const week = useGameStore((s) => s?.week ?? 1);
   const economicCycle = useGameStore((s) => s?.economicCycle);
+  const [showTour, setShowTour] = useState(false);
+  const [showCycleDetails, setShowCycleDetails] = useState(false);
+  useTutorialScreenBlocker(showTour);
   const [filter, setFilter] = useState<FilterType>('all');
 
   const globalWeek = ((year - 1) * 20) + week;
@@ -41,10 +46,15 @@ export default function MarketScreen() {
         subtitle="Prices update weekly"
         accentColor={Colors.info}
         right={(
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Market basics" onPress={() => setShowTour(true)}>
+            <Ionicons name="help-circle-outline" size={24} color={Colors.info} />
+          </Pressable>
           <Pressable style={styles.portfolioBtn} onPress={() => router.push('/portfolio')}>
             <Ionicons name="pie-chart-outline" size={17} color={Colors.primary} />
             <Text style={styles.portfolioBtnText}>Portfolio</Text>
           </Pressable>
+          </View>
         )}
       />
 
@@ -72,7 +82,7 @@ export default function MarketScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         <View style={styles.cycleCard}>
-          <View style={styles.cycleHeader}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Economic cycle details" accessibilityState={{ expanded: showCycleDetails }} onPress={() => setShowCycleDetails(!showCycleDetails)} style={styles.cycleHeader}>
             <View style={styles.cycleIcon}>
               <Ionicons
                 name={cyclePhase === 'boom' ? 'trending-up' : cyclePhase === 'recession' ? 'trending-down' : cyclePhase === 'recovery' ? 'refresh' : 'pulse'}
@@ -85,7 +95,9 @@ export default function MarketScreen() {
               <Text style={styles.cycleTitle}>{cycleLabel}</Text>
             </View>
             <Text style={styles.cycleWeeks}>{economicCycle?.weeksRemaining ?? 0}w</Text>
-          </View>
+            <Ionicons name={showCycleDetails ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textSecondary} />
+          </Pressable>
+          {showCycleDetails && <>
           <Text style={styles.cycleDescription}>{getEconomicCycleDescription(cyclePhase)}</Text>
           <View style={styles.cycleMetrics}>
             <Text style={styles.cycleMetric}>
@@ -96,6 +108,7 @@ export default function MarketScreen() {
             </Text>
             <Text style={styles.cycleMetric}>Sector demand varies</Text>
           </View>
+          </>}
         </View>
         {filtered.map((sd) => {
           const stock = listedByTicker.get(sd?.ticker);
@@ -146,6 +159,11 @@ export default function MarketScreen() {
           );
         })}
       </ScrollView>
+      <FeatureTourModal visible={showTour} title="Market basics" onClose={() => setShowTour(false)} steps={[
+        { title: 'Keep bill money separate', body: 'Investments are optional. Keep enough personal cash for tuition, transport and several weeks of bills before buying.', icon: 'wallet-outline' },
+        { title: 'Compare before buying', body: 'Open an asset to review its price, history and order cost. Prices can fall. Start small; no purchase is required to progress.', icon: 'analytics-outline' },
+        { title: 'Turn investments back into cash', body: 'Portfolio lists your holdings. Open an owned asset to sell shares when you need personal cash, including to fund a business. The sale value depends on the current price.', icon: 'pie-chart-outline' },
+      ]} />
     </SafeAreaView>
   );
 }

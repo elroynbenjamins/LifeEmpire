@@ -334,13 +334,12 @@ describe('corporate group management reporting', () => {
     expect(report.targetCompaniesFullyMet).toBe(1);
     expect(report.targetCompaniesAtRisk).toBe(1);
     expect(report.targetMetricsTotal).toBe(10);
-    expect(report.targetMetricsMet).toBe(6);
+    expect(report.targetMetricsMet).toBe(7);
     expect(report.targetPriorityCompanies[0].businessName).toBe('Off Target Co');
     expect(report.targetPriorityCompanies[0].missedLabels).toEqual(expect.arrayContaining([
       'Weekly revenue',
       'Profit margin',
       'Payroll / revenue',
-      'Maintenance condition',
     ]));
   });
 

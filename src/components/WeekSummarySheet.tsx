@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, Pressable } from 'react-native';
 import { Colors } from '../theme/colors';
 import { formatCurrency, formatPercent } from '../utils/format';
@@ -6,6 +6,9 @@ import useGameStore from '../store/gameStore';
 import achievementsData from '../data/achievements.json';
 import GameButton from './GameButton';
 import StatusPill from './StatusPill';
+import { useTutorialStore } from '../store/tutorialStore';
+import { getTutorialStep } from '../engine/tutorialEngine';
+import { tutorialSnapshot } from './TutorialDock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function WeekSummarySheet() {
@@ -16,6 +19,18 @@ export default function WeekSummarySheet() {
   const [showActivityDetails, setShowActivityDetails] = useState(false);
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(12, insets.bottom);
+  const sessions = useTutorialStore((s) => s.sessions);
+  const activeScope = useTutorialStore((s) => s.activeScope);
+  const session = sessions.find((s) => s.scope === activeScope);
+  const reportLesson = activeScope === tutorialSnapshot().scope && getTutorialStep(session)?.id === 'weekly_result';
+  useEffect(() => {
+    if (showSummary) useTutorialStore.getState().reconcile(tutorialSnapshot());
+  }, [showSummary, summary]);
+  const continueReport = () => {
+    const snapshot = tutorialSnapshot();
+    if (reportLesson) useTutorialStore.getState().settle(snapshot.scope, 'weekly_result', snapshot);
+    dismissSummary();
+  };
 
   if (!showSummary || !summary) return null;
 
@@ -72,6 +87,13 @@ export default function WeekSummarySheet() {
               </View>
             </View>
 
+            {reportLesson && (
+              <View style={styles.pendingDecisionBox}>
+                <Text style={styles.eventDesc}>
+                  This is the week just completed: income minus expenses and tax. Open Financial Breakdown for the bills, or Weekly Activity for events. Your next week's forecast may differ.
+                </Text>
+              </View>
+            )}
             {/* Inflation / Macro Event */}
             {summary?.inflationEvent && (
               <View style={styles.inflationBox}>
@@ -410,13 +432,6 @@ export default function WeekSummarySheet() {
               </View>
             )}
 
-            {summary?.relationshipGoalCompleted && (
-              <View style={[styles.eventBox, { backgroundColor: `${Colors.primary}12`, borderColor: `${Colors.primary}33` }]}>
-                <Text style={styles.eventTitle}>🎯 Shared Goal Completed</Text>
-                <Text style={styles.eventDesc}>{summary.relationshipGoalCompleted}</Text>
-              </View>
-            )}
-
             {(summary?.relationshipHeadline || (summary?.relationshipChange ?? 0) !== 0) && (
               <View style={[styles.eventBox, { backgroundColor: `${Colors.happiness}12`, borderColor: `${Colors.happiness}33` }]}>
                 <Text style={styles.eventTitle}>❤️ Personal Life</Text>
@@ -478,7 +493,7 @@ export default function WeekSummarySheet() {
             )}
           </ScrollView>
 
-          <GameButton label="Continue" trailingIcon="arrow-forward" onPress={dismissSummary} style={styles.continueButton} />
+          <GameButton label="Continue" trailingIcon="arrow-forward" onPress={continueReport} style={styles.continueButton} />
         </View>
       </View>
     </Modal>

@@ -44,13 +44,13 @@ describe('first life journey', () => {
     expect(journey.current?.id).toBe('first_year');
   });
 
-  test('retires automatically after the first in-game year', () => {
+  test('continues guiding players who have not started a career in Year 2', () => {
     const journey = getFirstLifeJourney({
       ...INITIAL_GAME_STATE,
       year: 2,
       week: 1,
     });
-    expect(journey.visible).toBe(false);
+    expect(journey.visible).toBe(true);
     expect(journey.steps.find((step) => step.id === 'first_year')?.complete).toBe(true);
   });
 });

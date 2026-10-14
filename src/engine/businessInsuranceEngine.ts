@@ -1,3 +1,4 @@
+// Legacy save/claim compatibility only. Active policy controls, premiums and insured incidents are retired.
 import {
   BusinessInsuranceArea,
   BusinessInsuranceClaim,

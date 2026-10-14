@@ -37,6 +37,7 @@ export default function EducationCareerReminderModal() {
             </View>
           )}
           <View style={styles.actions}>
+            {!ready && (reminder.courseLevel ?? 1) === 1 && <GameButton label="Prepare transport" icon="car-outline" onPress={() => { dismiss(); router.push('/housing?section=transport'); }} />}
             <GameButton accentColor={Colors.education} label="Open Career" icon="briefcase-outline" onPress={openCareer} />
             <GameButton variant="ghost" label="Later" onPress={dismiss} />
           </View>

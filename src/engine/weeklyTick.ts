@@ -1,5 +1,6 @@
 import { GameState, WeekSummary, LifetimeStatistics, INITIAL_STATISTICS, INITIAL_CAREER_STATE, TriggeredEvent, TempHappinessEffect, PendingInvestment } from '../types/game';
 import { getEconomicCycleDescription, processEconomy } from './economyEngine';
+import careerPathsData from '../data/career_paths.json';
 import { getPlayerFamilyWorkFraction, processRelationships } from './relationshipEngine';
 import { processLifecycle } from './lifecycleEngine';
 import { syncFamilyTree } from './familyTreeEngine';
@@ -434,24 +435,14 @@ export function weeklyTick(state: GameState, prestigeEffects: Record<string, num
   tempState.unlockedAchievements = [...(tempState?.unlockedAchievements ?? []), ...newAchievements];
 
   // ---------- Build Summary ----------
-  const completedJob = edu.completedCourseData
-    ? (jobsData as any[]).find((job) => job.requiredCourse === edu.completedCourseData?.id)
+  const completedPath = edu.completedCourseData
+    ? careerPathsData.find((path) => path.requiredCourseBase === edu.completedCourseData?.baseId)
     : null;
-  const housingIndex = (housingData as any[]).findIndex((housing) => housing.id === tempState.currentHousingId);
-  const studioIndex = (housingData as any[]).findIndex((housing) => housing.id === 'studio_apartment');
-  const smallHouseIndex = (housingData as any[]).findIndex((housing) => housing.id === 'small_house');
-  const familyHouseIndex = (housingData as any[]).findIndex((housing) => housing.id === 'family_house');
-  const luxuryVillaIndex = (housingData as any[]).findIndex((housing) => housing.id === 'luxury_villa');
-  const requiredHousing = completedJob?.level >= 7 ? { index: luxuryVillaIndex, name: 'Luxury Villa' }
-    : completedJob?.level >= 6 ? { index: familyHouseIndex, name: 'Family House' }
-    : completedJob?.level >= 5 ? { index: smallHouseIndex, name: 'Small House' }
-    : completedJob?.level >= 3 ? { index: studioIndex, name: 'Studio Apartment' }
-      : null;
+  const completedJob = completedPath?.positions[0];
   const missingRequirements: string[] = [];
-  if (completedJob?.requiresCar && tempState.currentCarId === 'none') {
-    missingRequirements.push(tempState.pendingCarDelivery ? 'Wait for your vehicle delivery' : 'Buy a vehicle');
+  if (completedJob && (!tempState.currentCarId || tempState.currentCarId === 'none')) {
+    missingRequirements.push(tempState.pendingCarDelivery ? 'Wait for your vehicle delivery' : 'Buy a Used Car or better (delivery takes one week)');
   }
-  if (requiredHousing && housingIndex < requiredHousing.index) missingRequirements.push(`Move into a ${requiredHousing.name} or better`);
 
   const summary: WeekSummary = {
     salaryEarned: salary,
@@ -497,7 +488,6 @@ export function weeklyTick(state: GameState, prestigeEffects: Record<string, num
     relationshipObligationCost: relationshipTick.obligationCost,
     relationshipEventTitle: relationshipTick.eventTitle,
     childBornName: relationshipTick.childBornName,
-    relationshipGoalCompleted: relationshipTick.relationshipGoalCompleted,
     partnerCareerEvent: relationshipTick.partnerCareerEvent,
     partnerDiedName: relationshipTick.partnerDiedName,
     partnerInheritance: relationshipTick.partnerInheritance,

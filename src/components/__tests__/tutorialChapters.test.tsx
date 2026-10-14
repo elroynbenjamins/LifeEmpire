@@ -67,15 +67,20 @@ function startHolding() {
   useTutorialStore.getState().startChapter(tutorialSnapshot(), 'holding', 'holding1');
 }
 
-test('owned businesses offer guidance without auto-starting it', () => {
+test('the first owned business automatically starts guidance once per save', () => {
   const view = render(<><BusinessDetailScreen /><TutorialDock /></>);
+  expect(view.getByTestId('tutorial-dock')).toBeTruthy();
+  act(() => useTutorialStore.getState().pause());
   expect(view.queryByTestId('tutorial-dock')).toBeNull();
-  expect(view.getByText('Start Business basics tour')).toBeTruthy();
+  expect(view.getByText('Resume Business basics tour')).toBeTruthy();
+  view.unmount();
+  const reopened = render(<><BusinessDetailScreen /><TutorialDock /></>);
+  expect(reopened.queryByTestId('tutorial-dock')).toBeNull();
+  expect(reopened.getByText('Resume Business basics tour')).toBeTruthy();
   noCommands();
 });
 test('the three Business lessons reveal the real sections and never spend money', () => {
   const view = render(<><BusinessDetailScreen /><TutorialDock /></>);
-  fireEvent.press(view.getByText('Start Business basics tour'));
   expect(view.getByTestId('tutorial-target-business.summary')).toBeTruthy();
   locate(); fireEvent.press(view.getByText('Got it'));
   expect(view.getByTestId('tutorial-target-business.team')).toBeTruthy();

@@ -77,7 +77,7 @@ describe('business valuation balance', () => {
     expect(distressedBreakdown.valuation).toBeLessThan(profitableValue);
   });
 
-  test('deferred maintenance lowers operating valuation', () => {
+  test('retired maintenance no longer lowers operating valuation', () => {
     const healthy = businessWith({
       weeklyProfitHistory: Array(20).fill(70_000),
       reinvestment: {
@@ -95,7 +95,7 @@ describe('business valuation balance', () => {
       },
     });
 
-    expect(getBusinessValuationBreakdown(neglected).maintenanceDiscount).toBeGreaterThan(0);
-    expect(calculateValuation(neglected)).toBeLessThan(calculateValuation(healthy));
+    expect(getBusinessValuationBreakdown(neglected).maintenanceDiscount).toBe(0);
+    expect(calculateValuation(neglected)).toBe(calculateValuation(healthy));
   });
 });

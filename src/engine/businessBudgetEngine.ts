@@ -6,7 +6,7 @@ import {
   BusinessLoan,
   OwnedBusiness,
 } from '../types/game';
-import { BUSINESS_REINVESTMENT_AREAS, getBusinessReinvestmentCost } from './businessReinvestmentEngine';
+import { BUSINESS_UPKEEP_ENABLED, BUSINESS_REINVESTMENT_AREAS, getBusinessReinvestmentCost } from './businessReinvestmentEngine';
 import { getBusinessGovernanceEffects } from './businessGovernanceEngine';
 import { applyBusinessDebtPrincipalPrepayment } from './businessDebtEngine';
 
@@ -144,7 +144,7 @@ export function normalizeBusinessBudgetReserves(
   reserves: Partial<BusinessBudgetReserves> | null | undefined,
 ): BusinessBudgetReserves {
   return {
-    reinvestment: Math.max(0, Math.round(reserves?.reinvestment ?? 0)),
+    reinvestment: BUSINESS_UPKEEP_ENABLED ? Math.max(0, Math.round(reserves?.reinvestment ?? 0)) : 0,
     growth: Math.max(0, Math.round(reserves?.growth ?? 0)),
   };
 }
@@ -160,7 +160,7 @@ export function getBusinessBudgetReserveTargets(
     0,
     Math.round(Math.max(0, totalExpenses) * plan.targetReserveWeeks * (1 - governanceEffects.treasuryEfficiency)),
   );
-  const reinvestmentReserveTarget = (Object.keys(BUSINESS_REINVESTMENT_AREAS) as Array<keyof typeof BUSINESS_REINVESTMENT_AREAS>)
+  const reinvestmentReserveTarget = !BUSINESS_UPKEEP_ENABLED ? 0 : (Object.keys(BUSINESS_REINVESTMENT_AREAS) as Array<keyof typeof BUSINESS_REINVESTMENT_AREAS>)
     .reduce((sum, area) => sum + getBusinessReinvestmentCost(business, area, inflationMultiplier), 0);
   const growthReserveTarget = Math.round(
     Math.min(

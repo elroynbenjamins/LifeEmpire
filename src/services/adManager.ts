@@ -18,6 +18,7 @@ let rewardedBaseEventType: any = null;
 let listeners: Listener[] = [];
 let interstitialAd: any = null;
 let interstitialLoading = false;
+let interstitialShowing = false;
 
 function setAdState(next: AdState) {
   adState = next;
@@ -170,8 +171,17 @@ export async function showRewardedAd(onReward: () => void): Promise<boolean> {
   });
 }
 
-export async function loadInterstitialAd(): Promise<boolean> {
-  if (interstitialLoading || interstitialAd) return false;
+let interstitialLoadPromise: Promise<boolean> | null = null;
+
+export function loadInterstitialAd(): Promise<boolean> {
+  if (interstitialLoadPromise) return interstitialLoadPromise;
+  interstitialLoadPromise = requestInterstitialAd().finally(() => { interstitialLoadPromise = null; });
+  return interstitialLoadPromise;
+}
+
+async function requestInterstitialAd(): Promise<boolean> {
+  if (interstitialAd && !interstitialShowing) return true;
+  if (interstitialLoading || interstitialShowing) return false;
   interstitialLoading = true;
 
   try {
@@ -223,21 +233,31 @@ export async function loadInterstitialAd(): Promise<boolean> {
   }
 }
 
-export async function showInterstitialAd(onClosed: () => void): Promise<boolean> {
-  if (!interstitialAd) return false;
+export async function showInterstitialAd(onClosed: () => void, onFailed?: () => void): Promise<boolean> {
+  if (!interstitialAd || interstitialShowing) return false;
   const ad = interstitialAd;
-
+  interstitialShowing = true;
+  let closedSub: Unsubscribe | undefined;
+  let errorSub: Unsubscribe | undefined;
+  let finished = false;
+  const finish = (shown: boolean) => {
+    if (finished) return;
+    finished = true;
+    closedSub?.();
+    errorSub?.();
+    interstitialShowing = false;
+    if (interstitialAd === ad) interstitialAd = null;
+    if (shown) onClosed();
+    else onFailed?.();
+  };
   try {
     const { AdEventType } = await loadGoogleMobileAdsModule();
-    const unsubscribeClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
-      unsubscribeClosed();
-      if (interstitialAd === ad) interstitialAd = null;
-      onClosed();
-    });
+    closedSub = ad.addAdEventListener(AdEventType.CLOSED, () => finish(true));
+    errorSub = ad.addAdEventListener(AdEventType.ERROR, () => finish(false));
     await ad.show();
     return true;
   } catch {
-    if (interstitialAd === ad) interstitialAd = null;
+    finish(false);
     return false;
   }
 }

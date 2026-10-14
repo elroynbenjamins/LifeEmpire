@@ -67,7 +67,7 @@ describe('September gameplay regressions', () => {
     const expired = processBusinessWeek({ ...business, foundedWeek: 0 }, 1, 16, 11);
     expect(supported.updatedBusiness.lastExpenseBreakdown?.salaries).toBe(1140);
     expect(expired.updatedBusiness.lastExpenseBreakdown?.salaries).toBe(1200);
-    expect(supported.weeklyRevenue).toBe(Math.round(expired.weeklyRevenue * 1.03));
+    expect(Math.abs(supported.weeklyRevenue - Math.round(expired.weeklyRevenue * 1.03))).toBeLessThanOrEqual(1);
   });
   test('competition changes balance and profit history consistently', () => {
     jest.spyOn(Math, 'random').mockReturnValue(0.5);

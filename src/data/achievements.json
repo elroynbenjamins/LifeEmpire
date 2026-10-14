@@ -882,15 +882,6 @@
     "category": "Family"
   },
   {
-    "id": "fully_insured",
-    "name": "Risk Managed",
-    "description": "Protect one business with Comprehensive insurance in all 4 areas",
-    "xpReward": 150,
-    "gemReward": 3,
-    "icon": "shield-checkmark-outline",
-    "category": "Business"
-  },
-  {
     "id": "reinvestment_cycle",
     "name": "Renewed Operations",
     "description": "Complete technology, premises and equipment reinvestment cycles in one business",

@@ -11,9 +11,10 @@ describe('lean startup business model', () => {
     expect(getBusinessOperatingScale(25).overhead).toBeLessThan(getBusinessOperatingScale(40).overhead);
     expect(getBusinessOperatingScale(-50)).toEqual(getBusinessOperatingScale(0));
   });
-  test('all upgrades provide 2% revenue while reputation effects remain 25% weaker', () => {
+  test('upgrade prices are discounted while capped benefits and reputation effects remain consistent', () => {
     for (const upgrade of upgrades) {
-      expect(getUpgrade(upgrade.id)?.revenueBoost).toBeCloseTo(0.02);
+      expect(getUpgrade(upgrade.id)?.cost).toBe(Math.round(upgrade.cost * 0.90));
+      expect(getUpgrade(upgrade.id)?.revenueBoost).toBeCloseTo(Math.max(0.08, Math.min(0.16, upgrade.revenueBoost)));
       expect(getUpgrade(upgrade.id)?.reputationBoost).toBeCloseTo(upgrade.reputationBoost * 0.75);
     }
   });

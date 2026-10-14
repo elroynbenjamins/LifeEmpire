@@ -1,6 +1,6 @@
 import { HoldingCompany, OwnedBusiness, SoldBusinessRecord } from '../types/game';
 import { getBusinessReinvestmentUrgency } from './businessReinvestmentEngine';
-import { getBusinessCoverageGaps } from './businessInsuranceEngine';
+
 import { isBusinessBudgetReviewDue } from './businessBudgetEngine';
 import { getBusinessGovernanceAttentionReason } from './businessGovernanceEngine';
 import { getCorporateWorkforceAttentionReason } from './businessWorkforceEngine';
@@ -218,7 +218,7 @@ export function getBusinessEmpireSummary(
     || Boolean(business.pendingRetention)
     || (business.acquisition?.integrationStrategy === 'pending')
     || Boolean(getBusinessReinvestmentUrgency(business))
-    || getBusinessCoverageGaps(business).length > 0
+    || (business.balance ?? 0) < 0
     || isBusinessBudgetReviewDue(business, currentYear)
     || Boolean(getBusinessGovernanceAttentionReason(business))
     || Boolean(getCorporateWorkforceAttentionReason(business))

@@ -13,6 +13,8 @@ import StatusPill from '../../src/components/StatusPill';
 import useGameStore from '../../src/store/gameStore';
 import { formatCurrency } from '../../src/utils/format';
 import { inflated } from '../../src/engine/economyEngine';
+import { getTotalWeeklyExpenses, getWeeklyCourseCost } from '../../src/engine/financeEngine';
+import { calculatePartnerContribution } from '../../src/engine/relationshipEngine';
 import { meetsExperienceRequirement } from '../../src/engine/educationEngine';
 import coursesData from '../../src/data/courses.json';
 import { loadRewardedAd, showRewardedAd } from '../../src/services/adManager';
@@ -65,6 +67,14 @@ export default function EducationScreen() {
   const [nativeAdPhase, setNativeAdPhase] = useState<'idle' | 'loading' | 'showing'>('idle');
   const [courseLevel, setCourseLevel] = useState<1 | 2 | 3>(1);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [showAllCourses, setShowAllCourses] = useState(false);
+  const startingOut = completedCourses.length === 0 && !currentCourseId;
+  const livingCosts = useGameStore((state) => {
+    const partner = state.relationshipState?.activeConnections?.find(item => item.id === state.relationshipState?.partnerId) ?? null;
+    const household = calculatePartnerContribution(partner, state);
+    return getTotalWeeklyExpenses(state) - getWeeklyCourseCost(state)
+      + household.householdExtraCost + household.familyCost + household.obligationCost - household.contribution;
+  });
   const guidedEnrollmentRequest = useTutorialFocusStore((s) => s.target === 'education.enroll' && s.status === 'locating' ? s.request : null);
   useEffect(() => {
     if (guidedEnrollmentRequest !== null) setCourseLevel(1);
@@ -89,11 +99,7 @@ export default function EducationScreen() {
     : null;
 
   const handleEnroll = (courseId: string) => {
-    const isFirstEducation = !currentCourseId && completedCourses.length === 0;
     enrollCourse?.(courseId);
-    if (isFirstEducation && useGameStore.getState().currentCourseId === courseId) {
-      router.replace('/tabs');
-    }
   };
 
   const speedUp = async () => {
@@ -368,13 +374,22 @@ export default function EducationScreen() {
           </View>
           <StatusPill
             compact
-            label={`${(coursesData as any[]).filter((course) => course.level === courseLevel).length} courses`}
+            label={startingOut && !showAllCourses && courseLevel === 1 ? '3 starting options' : `${(coursesData as any[]).filter((course) => course.level === courseLevel).length} courses`}
             color={levelAccent(courseLevel)}
           />
         </View>
 
+        {startingOut && !partTimeJob && <GameButton variant="secondary" label="Compare student work" icon="briefcase-outline" onPress={() => router.push('/tabs/career')} />}
+        {startingOut && courseLevel === 1 && (
+          <Pressable accessibilityRole="button" onPress={() => setShowAllCourses(!showAllCourses)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12 }}>
+            <Ionicons name={showAllCourses ? 'chevron-up' : 'list-outline'} size={16} color={Colors.education} />
+            <Text style={{ color: Colors.education }}>{showAllCourses ? 'Lower-cost starting options' : 'All career paths'}</Text>
+          </Pressable>
+        )}
         {CATEGORIES.map((cat) => {
-          const courses = (groupedCourses[cat] ?? []).filter((course) => course.level === courseLevel);
+          const courses = (groupedCourses[cat] ?? []).filter((course) => course.level === courseLevel
+            && (!startingOut || showAllCourses || courseLevel !== 1 || ['retail', 'office', 'hospitality'].includes(course.baseId)));
           if (courses.length === 0) return null;
           const categoryAccent = levelAccent(courseLevel);
 
@@ -396,6 +411,8 @@ export default function EducationScreen() {
                 const canAfford = cost <= cash;
                 const canEnroll = !currentCourseId && !isDone && hasPrereq && hasExp && canAfford;
                 const accent = levelAccent(course.level);
+                const studyCashFlow = (studentWork ? (studentWork.minWeeklyIncome + studentWork.maxWeeklyIncome) / 2 : 0)
+                  - livingCosts - inflated(course.weeklyCost ?? 0, inflationMultiplier);
                 const displayDuration = getStudentStudyDuration(course.duration ?? 1, studentWork?.id ?? null);
                 const requiredWeeks = course.level === 2 ? 75 : course.level >= 3 ? 150 : 0;
                 const missingExperience = Math.max(0, requiredWeeks - weeksEmployed);
@@ -438,6 +455,12 @@ export default function EducationScreen() {
                           )}
                         </View>
 
+                        {!currentCourseId && !isDone && course.level === 1 && (
+                          <Text style={[styles.courseMeta, { marginTop: 6 }]}>
+                            Cash after tuition: {formatCurrency(cash - cost)}. Career entry also needs a delivered car.
+                            {startingOut ? ` Estimated student budget: ${formatCurrency(studyCashFlow)}/wk with ${studentWork?.shortName ?? 'no student job'}.${studyCashFlow < 0 ? ` About ${Math.max(0, Math.floor((cash - cost) / -studyCashFlow))} weeks of cash left before unexpected costs.` : ''}` : ''}
+                          </Text>
+                        )}
                         <View style={styles.courseStatusRow}>
                           {isDone ? (
                             <StatusPill compact icon="checkmark-circle-outline" label="Completed" color={Colors.primary} />

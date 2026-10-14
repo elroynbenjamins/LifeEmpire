@@ -175,11 +175,11 @@ describe('professional executive and board governance', () => {
     const governedTick = tickBusinessReinvestment(governed, 82);
 
     expect(governedTick.reinvestment.technology.condition)
-      .toBeGreaterThan(plainTick.reinvestment.technology.condition);
+      .toBe(plainTick.reinvestment.technology.condition);
     expect(governedTick.reinvestment.premises.condition)
-      .toBeGreaterThan(plainTick.reinvestment.premises.condition);
+      .toBe(plainTick.reinvestment.premises.condition);
     expect(governedTick.reinvestment.equipment.condition)
-      .toBeGreaterThan(plainTick.reinvestment.equipment.condition);
+      .toBe(plainTick.reinvestment.equipment.condition);
   });
 
   test('CTO, counsel and risk committee reduce cyber and liability premiums', () => {

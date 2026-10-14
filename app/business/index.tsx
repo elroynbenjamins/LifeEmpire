@@ -18,7 +18,7 @@ import {
 import { businessTypeImages } from '../../src/assets/progressionImages';
 import { ACQUISITION_UNLOCK_NET_WORTH } from '../../src/engine/acquisitionEngine';
 import { getBusinessReinvestmentUrgency } from '../../src/engine/businessReinvestmentEngine';
-import { BUSINESS_INSURANCE_AREAS, getBusinessCoverageGaps } from '../../src/engine/businessInsuranceEngine';
+
 import { isBusinessBudgetReviewDue } from '../../src/engine/businessBudgetEngine';
 import { getBusinessGovernanceAttentionReason } from '../../src/engine/businessGovernanceEngine';
 import { getCorporateWorkforceAttentionReason } from '../../src/engine/businessWorkforceEngine';
@@ -102,15 +102,14 @@ function getBusinessAttentionItems(
     });
   }
 
-  const coverageGaps = getBusinessCoverageGaps(business);
-  if (coverageGaps.length > 0) {
+  if ((business.balance ?? 0) < 0) {
     items.push({
-      label: 'Coverage',
-      detail: `Insurance gap: ${coverageGaps.map((area) => BUSINESS_INSURANCE_AREAS[area].name).join(', ')}.`,
-      color: Colors.warning,
-      icon: 'shield-outline',
-      target: 'risk',
-      priority: 2,
+      label: 'Cash shortfall',
+      detail: `Raise ${formatCurrency(-business.balance)} to clear the negative balance.`,
+      color: Colors.negative,
+      icon: 'cash-outline',
+      target: 'finance',
+      priority: 3,
     });
   }
 
@@ -301,6 +300,7 @@ export default function BusinessPortfolioScreen() {
       />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        {businesses.length > 0 && <>
         <GameCard
           variant="hero"
           eyebrow="EMPIRE OVERVIEW"
@@ -356,6 +356,7 @@ export default function BusinessPortfolioScreen() {
           </View>
         </GameCard>
 
+        </>}
         <View style={styles.empireActions}>
           <Pressable style={styles.empireAction} onPress={() => router.push('/business/start')}>
             <View style={[styles.empireActionIcon, { backgroundColor: `${capacityFull ? Colors.warning : Colors.business}14` }]}>
@@ -367,7 +368,7 @@ export default function BusinessPortfolioScreen() {
             </Text>
           </Pressable>
 
-          <Pressable style={styles.empireAction} onPress={() => router.push('/business/acquisitions')}>
+          {(businesses.length > 0 || acquisitionsUnlocked) && <Pressable style={styles.empireAction} onPress={() => router.push('/business/acquisitions')}>
             <View style={[styles.empireActionIcon, { backgroundColor: acquisitionsUnlocked ? `${Colors.primary}14` : Colors.elevated }]}>
               <Ionicons name={acquisitionsUnlocked ? 'git-merge-outline' : 'lock-closed-outline'} size={19} color={acquisitionsUnlocked ? Colors.primary : Colors.textMuted} />
             </View>
@@ -375,15 +376,14 @@ export default function BusinessPortfolioScreen() {
             <Text style={styles.empireActionSub}>
               {acquisitionsUnlocked ? 'M&A market' : `${Math.min(100, Math.round(netWorth / ACQUISITION_UNLOCK_NET_WORTH * 100))}% unlocked`}
             </Text>
-          </Pressable>
-
-          <Pressable style={styles.empireAction} onPress={() => router.push('/business/holdings')}>
+          </Pressable>}
+          {(businesses.length > 0 || holdingCompanies.length > 0) && <Pressable style={styles.empireAction} onPress={() => router.push('/business/holdings')}>
             <View style={[styles.empireActionIcon, { backgroundColor: `${Colors.info}14` }]}>
               <Ionicons name="layers-outline" size={19} color={Colors.info} />
             </View>
             <Text style={styles.empireActionTitle}>Holdings</Text>
             <Text style={styles.empireActionSub}>{holdingCompanies.length} active</Text>
-          </Pressable>
+          </Pressable>}
         </View>
 
         {businesses.length > 0 && (

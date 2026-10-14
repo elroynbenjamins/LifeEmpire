@@ -110,12 +110,6 @@ export function getAchievementProgress(
       .reduce((sum, key) => sum + Number((services as any)[key] ?? 0), 0);
     return Math.max(max, total);
   }, 0);
-  const maxComprehensiveInsurance = businesses.reduce((max, business) => {
-    const policies = business.insurancePolicies ?? {};
-    const count = ['property', 'equipment', 'cyber', 'liability']
-      .filter((area) => (policies as any)[area] === 'comprehensive').length;
-    return Math.max(max, count);
-  }, 0);
   const maxReinvestmentCycles = businesses.reduce((max, business) => {
     const reinvestment = business.reinvestment;
     if (!reinvestment) return max;
@@ -238,7 +232,6 @@ export function getAchievementProgress(
     case 'identity_traits_3': return progress(identityTraits.size, 3, 'count', 'traits');
     case 'first_business_exit': return progress(state.soldBusinesses?.length ?? 0, 1, 'count', 'exit');
     case 'profitable_exit': return progress((state.soldBusinesses ?? []).filter((sale) => (sale.lifetimeCashResult ?? 0) > 0).length, 1, 'count', 'profitable exit');
-    case 'fully_insured': return progress(maxComprehensiveInsurance, 4, 'count', 'coverage areas');
     case 'reinvestment_cycle': return progress(maxReinvestmentCycles, 3, 'count', 'renewal tracks');
     case 'outside_investors': return progress(businesses.some((business) => (business.ownership ?? []).some((stake) => stake.ownerType === 'investor' && (stake.percent ?? 0) > 0)) ? 1 : 0, 1, 'count');
     case 'business_strategy_decision': return progress(businesses.some((business) => (business.timeline ?? []).some((entry) => (entry.title ?? '').startsWith('🧭'))) ? 1 : 0, 1, 'count');
@@ -427,11 +420,6 @@ export function checkAchievements(state: GameState, netWorth: number, weeklySala
       .reduce((sum, key) => sum + Number((services as any)[key] ?? 0), 0);
     return Math.max(max, levels);
   }, 0);
-  const fullyInsuredBusiness = businesses.some((business) => {
-    const policies = business.insurancePolicies ?? {};
-    return ['property', 'equipment', 'cyber', 'liability']
-      .every((area) => (policies as any)[area] === 'comprehensive');
-  });
   const completedReinvestmentCycle = businesses.some((business) => {
     const reinvestment = business.reinvestment;
     return !!reinvestment
@@ -466,7 +454,6 @@ export function checkAchievements(state: GameState, netWorth: number, weeklySala
   check('identity_traits_3', distinctIdentityTraits.size >= 3);
   check('first_business_exit', (state.soldBusinesses ?? []).length >= 1);
   check('profitable_exit', (state.soldBusinesses ?? []).some((sale) => (sale.lifetimeCashResult ?? 0) > 0));
-  check('fully_insured', fullyInsuredBusiness);
   check('reinvestment_cycle', completedReinvestmentCycle);
 
   // Real estate progression

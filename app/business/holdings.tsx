@@ -421,6 +421,8 @@ export default function HoldingCompaniesScreen() {
                 inflationMultiplier,
               );
               const attentionCount = attentionSummary.attention;
+              const rescueFunding = Math.ceil(Math.max(0,
+                subsidiaries.reduce((total, business) => total + Math.max(0, -business.balance), 0) - cashReserve));
               const attentionShortcuts: Array<{
                 key: HoldingSubsidiaryFilter;
                 label: string;
@@ -733,7 +735,7 @@ export default function HoldingCompaniesScreen() {
                   </Text>
                   <Text style={styles.transactionHint}>Personal cash → Holding reserve • tap an amount to preview.</Text>
                   <View style={styles.buttonRow}>
-                    {CAPITAL_AMOUNTS.map((amount) => (
+                    {[...new Set([...CAPITAL_AMOUNTS, rescueFunding])].filter(amount => amount > 0).map((amount) => (
                       <Pressable
                         key={amount}
                         accessibilityRole="button"
@@ -824,7 +826,6 @@ export default function HoldingCompaniesScreen() {
                       );
                     })}
                   </View>
-
                   <TutorialAnchor id={chapterAnchor('holding.cashflows')}>
                     <Text style={styles.synergyTitle}>Management fee</Text>
                     <Text style={styles.capitalMeta}>
@@ -929,7 +930,6 @@ export default function HoldingCompaniesScreen() {
                       );
                     })}
                   </View>
-
                   <Text style={styles.synergyTitle}>Owner distribution</Text>
                   <Text style={styles.capitalMeta}>
                     Available above reserve target: {formatCurrency(availableDistributionCash)}. Strategic investments may still use the full Holding reserve.
@@ -1400,7 +1400,7 @@ export default function HoldingCompaniesScreen() {
                           </View>
                         </TutorialAnchor>
                         <View style={styles.allocationAmountRow}>
-                          {SUBSIDIARY_ALLOCATION_AMOUNTS.map((amount) => {
+                          {[...new Set([...SUBSIDIARY_ALLOCATION_AMOUNTS, Math.ceil(Math.max(0, -business.balance))])].filter(amount => amount > 0).map((amount) => {
                             const active = allocationAmount === amount;
                             return (
                               <Pressable

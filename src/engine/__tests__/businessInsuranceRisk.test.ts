@@ -182,58 +182,14 @@ describe('business insurance and operational risk', () => {
     expect(result.claim?.netLoss).toBe(result.netLoss);
   });
 
-  test('local operational crisis snapshots the policy that existed when the incident appeared', () => {
-    const business = makeBusiness({
-      reinvestment: {
-        technology: { condition: 100, lastRenewedGlobalWeek: 41 },
-        premises: { condition: 30, lastRenewedGlobalWeek: 1 },
-        equipment: { condition: 100, lastRenewedGlobalWeek: 41 },
-      },
-      insurancePolicies: {
-        property: 'standard',
-        equipment: 'none',
-        cyber: 'none',
-        liability: 'none',
-      },
-    });
-    jest.spyOn(Math, 'random').mockReturnValue(0.99);
-
-    const incident = makeBusinessCrisis(business, 100);
-
-    expect(incident.title).toBe('Premises Damage');
-    expect(incident.insuranceArea).toBe('property');
-    expect(incident.insuranceTierAtCreation).toBe('standard');
-
-    const changedLater = {
-      ...business,
-      insurancePolicies: { ...business.insurancePolicies!, property: 'comprehensive' as const },
-    };
-    expect(changedLater.insurancePolicies.property).toBe('comprehensive');
-    expect(incident.insuranceTierAtCreation).toBe('standard');
-  });
-
-  test('corporate cyber and liability incidents snapshot the relevant policies', () => {
-    const business = makeBusiness({
-      valuation: 100_000_000,
-      insurancePolicies: {
-        property: 'basic',
-        equipment: 'standard',
-        cyber: 'comprehensive',
-        liability: 'standard',
-      },
-    });
-
-    const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
-    const cyber = makeCorporateScaleCrisis(business, 120);
-    expect(cyber.title).toBe('Cybersecurity Incident');
-    expect(cyber.insuranceArea).toBe('cyber');
-    expect(cyber.insuranceTierAtCreation).toBe('comprehensive');
-
-    randomSpy.mockReturnValue(0.99);
-    const recall = makeCorporateScaleCrisis(business, 121);
-    expect(recall.title).toBe('Product / Service Recall');
-    expect(recall.insuranceArea).toBe('liability');
-    expect(recall.insuranceTierAtCreation).toBe('standard');
+  test('retired insurance incidents are no longer generated at any company scale', () => {
+    const business = makeBusiness({ valuation: 100_000_000 });
+    const random = jest.spyOn(Math, 'random');
+    for (const roll of [0, 0.2, 0.4, 0.6, 0.8, 0.999]) {
+      random.mockReturnValue(roll);
+      expect(makeBusinessCrisis(business, 100).insuranceArea).toBeUndefined();
+      expect(makeCorporateScaleCrisis(business, 100).insuranceArea).toBeUndefined();
+    }
   });
 
   test('corporate companies with no cyber or liability cover surface coverage gaps', () => {
@@ -253,7 +209,7 @@ describe('business insurance and operational risk', () => {
     expect(getBusinessInsuranceRiskSummary(covered).coveredAreas).toBe(2);
   });
 
-  test('explicit policy premiums feed the weekly insurance expense line exactly', () => {
+  test('legacy policies no longer charge any weekly insurance expense', () => {
     const insured = makeBusiness({
       insurancePolicies: {
         property: 'standard',
@@ -280,6 +236,8 @@ describe('business insurance and operational risk', () => {
     expect(
       (insuredWeek.updatedBusiness.lastExpenseBreakdown?.insurance ?? 0)
       - (uninsuredWeek.updatedBusiness.lastExpenseBreakdown?.insurance ?? 0)
-    ).toBe(premium);
+    ).toBe(0);
+    expect(insuredWeek.updatedBusiness.lastExpenseBreakdown?.insurance).toBe(0);
+    expect(insuredWeek.updatedBusiness.lastWeekProfit).toBe(uninsuredWeek.updatedBusiness.lastWeekProfit);
   });
 });

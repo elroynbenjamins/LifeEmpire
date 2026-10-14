@@ -12,16 +12,25 @@ import { useTutorialAnchor } from './TutorialScrollView';
 import { tutorialSnapshot } from './TutorialDock';
 
 type ChapterStep = NonNullable<ReturnType<typeof getChapterStep>>;
-export default function TutorialChapterLauncher({ chapter, subjectId }: { chapter: TutorialChapterId; subjectId?: string }) {
+export default function TutorialChapterLauncher({ chapter, subjectId, autoStart = false }: { chapter: TutorialChapterId; subjectId?: string; autoStart?: boolean }) {
   const router = useRouter();
   const scope = useGameStore((state) => getTutorialScope(state.activeSlot ?? 0, state.playerName ?? 'Player', state.generation ?? 1));
-  const { ready, chapters, activeChapterKey, hydrate, startChapter } = useTutorialStore(useShallow((state) => ({
-    ready: state.ready, chapters: state.chapters, activeChapterKey: state.activeChapterKey,
+  const canAutoStart = useGameStore((state) => Boolean(state.initialized && !state.isLoading && !state.showMainMenu && !state.showSlotPicker && !state.showNameModal && !state.lifecycle?.isDead));
+  const { ready, chapters, activeChapterKey, activeScope, hydrate, startChapter } = useTutorialStore(useShallow((state) => ({
+    ready: state.ready, chapters: state.chapters, activeChapterKey: state.activeChapterKey, activeScope: state.activeScope,
     hydrate: state.hydrate, startChapter: state.startChapter,
   })));
   useEffect(() => { void hydrate(); }, [hydrate]);
   const key = chapterSessionKey(scope, chapter);
   const session = chapters.find((entry) => chapterSessionKey(entry.scope, entry.chapter) === key);
+  useEffect(() => {
+    if (!autoStart || !ready || !canAutoStart || !subjectId || session || activeChapterKey || activeScope) return;
+    const snapshot = tutorialSnapshot();
+    if (snapshot.scope !== scope) return;
+    const candidate = { scope, chapter, subjectId, baselineWeek: snapshot.globalWeek, completed: [], skipped: [] };
+    if (!getChapterContext(candidate, useGameStore.getState()).exists) return;
+    startChapter(snapshot, chapter, subjectId);
+  }, [autoStart, ready, canAutoStart, subjectId, session, activeChapterKey, activeScope, scope, chapter, startChapter]);
   if (activeChapterKey === key && session?.subjectId === subjectId) return null;
   if (!subjectId) return <Text style={styles.hint}>Open an owned {chapter === 'business' ? 'business' : 'holding company'} to take this optional tour.</Text>;
   const unfinished = Boolean(getChapterStep(session));

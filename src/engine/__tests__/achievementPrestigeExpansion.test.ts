@@ -294,11 +294,12 @@ describe('achievement and Prestige expansion', () => {
 
   test('achievements award 2 Gems normally and 3 Gems for 100+ XP milestones', () => {
     const achievements = achievementsData as any[];
-    expect(achievements).toHaveLength(106);
+    expect(achievements).toHaveLength(105);
+    expect(achievements.some(achievement => achievement.id === 'fully_insured')).toBe(false);
     expect(achievements.every((achievement) => [2, 3].includes(achievement.gemReward))).toBe(true);
     expect(achievements.filter((achievement) => (achievement.xpReward ?? 0) >= 100).every((achievement) => achievement.gemReward === 3)).toBe(true);
     expect(achievements.filter((achievement) => (achievement.xpReward ?? 0) < 100).every((achievement) => achievement.gemReward === 2)).toBe(true);
-    expect(achievements.reduce((total, achievement) => total + achievement.gemReward, 0)).toBe(266);
+    expect(achievements.reduce((total, achievement) => total + achievement.gemReward, 0)).toBe(263);
     expect(new Set(achievements.map((achievement) => achievement.category))).toEqual(new Set([
       'Career', 'Education', 'Investing', 'Business', 'Real Estate', 'Family', 'Wealth', 'Lifestyle',
     ]));
@@ -355,7 +356,7 @@ describe('achievement and Prestige expansion', () => {
 
   test('achievement data covers the major modern gameplay systems', () => {
     const ids = new Set((achievementsData as any[]).map((achievement) => achievement.id));
-    expect(ids.size).toBe(106);
+    expect(ids.size).toBe(105);
     for (const id of [
       'generation_3',
       'family_business_gen3',
@@ -373,7 +374,6 @@ describe('achievement and Prestige expansion', () => {
       'property_value_1m',
       'expert_five',
       'dividends_100k',
-      'fully_insured',
       'reinvestment_cycle',
       'auto_strategy_first',
       'corporate_workforce_first',
@@ -468,7 +468,6 @@ describe('achievement and Prestige expansion', () => {
       'identity_traits_3',
       'first_business_exit',
       'profitable_exit',
-      'fully_insured',
       'reinvestment_cycle',
       'first_property',
       'auction_winner',

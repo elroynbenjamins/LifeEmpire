@@ -51,7 +51,6 @@ function hasFullTimeCareer(state: FirstLifeJourneyState): boolean {
 function hasTransport(state: FirstLifeJourneyState): boolean {
   return Boolean(
     (state.currentCarId && state.currentCarId !== 'none')
-    || state.pendingCarDelivery?.carId
   );
 }
 
@@ -72,8 +71,8 @@ export function getFirstLifeJourney(state: FirstLifeJourneyState): FirstLifeJour
   const steps: FirstLifeStep[] = [
     {
       id: 'education',
-      title: 'Choose your education',
-      detail: 'Pick a Basic course that matches the career direction you want to explore first.',
+      title: 'Plan your first qualification',
+      detail: 'Choose student work first if tuition would leave too little cash for bills. Then pick a Basic course.',
       actionLabel: 'Open Education',
       route: '/tabs/education',
       complete: educationChosen,
@@ -137,7 +136,7 @@ export function getFirstLifeJourney(state: FirstLifeJourneyState): FirstLifeJour
   const current = steps.find((step) => !step.complete) ?? null;
 
   return {
-    visible: !firstYearComplete,
+    visible: !careerStarted,
     completed,
     total: steps.length,
     current,

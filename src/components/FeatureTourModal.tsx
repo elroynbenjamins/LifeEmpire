@@ -38,15 +38,15 @@ export default function FeatureTourModal({ visible, title, steps, onClose }: Fea
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <Pressable
-        style={styles.backdrop}
-        onPress={onClose}
-        accessibilityRole="button"
-        accessibilityLabel="Close tour"
-      >
+      <View style={styles.backdrop}>
         <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss tour backdrop"
+        />
+        <View
           style={[styles.card, compact && styles.cardCompact]}
-          onPress={(event) => event.stopPropagation()}
           accessibilityViewIsModal
           testID="feature-tour"
         >
@@ -115,8 +115,8 @@ export default function FeatureTourModal({ visible, title, steps, onClose }: Fea
               </Pressable>
             </View>
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

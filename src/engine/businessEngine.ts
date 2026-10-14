@@ -5,7 +5,6 @@ import { getBusinessDebtPrincipal, processScheduledBusinessLoanPayments } from '
 import {
   createDefaultBusinessReinvestmentState,
   getBusinessReinvestmentEffects,
-  getBusinessReinvestmentUrgency,
   tickBusinessReinvestment,
 } from './businessReinvestmentEngine';
 import {
@@ -13,10 +12,7 @@ import {
   createBusinessBudgetPlan,
   getBusinessProtectedCash,
 } from './businessBudgetEngine';
-import {
-  getBusinessInsuranceTier,
-  getBusinessInsuranceTotalWeeklyPremium,
-} from './businessInsuranceEngine';
+
 import {
   appendCompletedCorporateCapex,
   getCorporateCapexBookValue,
@@ -31,7 +27,7 @@ import {
   tickBusinessGovernance,
 } from './businessGovernanceEngine';
 import {
-  CORPORATE_WORKFORCE_UNLOCK_VALUATION,
+  canUnlockCorporateWorkforce,
   applyCorporateHrDecisionChoice,
   createCorporateWorkforce,
   makeCorporateHrDecision,
@@ -142,6 +138,7 @@ function getBadSeasonForIndustry(industry: string, seasonIdx: number) {
   return (BAD_SEASONS[industry] ?? []).find((b) => b.seasonIdx === seasonIdx) ?? null;
 }
 import businessTypesData from '../data/business_types.json';
+import { getRecruitmentWaitWeeks, getRecruitmentCooldown, getSmallBusinessPayrollDiscount } from './businessStaffingEngine';
 import businessUpgradesData from '../data/business_upgrades.json';
 import businessEventsData from '../data/business_events.json';
 import employeeRolesData from '../data/employee_roles.json';
@@ -732,23 +729,6 @@ export function getAutomaticStrategicDecisionChoice(
 }
 
 export function makeBusinessCrisis(biz: OwnedBusiness, globalWeek: number): BusinessPendingDecision {
-  const absoluteCost = (pct: number, minimum: number, maximum: number) =>
-    Math.round(Math.max(minimum, Math.min(maximum, Math.max(0, biz.valuation ?? 0) * pct)));
-
-  const equipmentReplacement = absoluteCost(0.015, 5_000, 500_000);
-  const equipmentRepair = absoluteCost(0.006, 3_000, 200_000);
-  const propertyRestore = absoluteCost(0.020, 10_000, 750_000);
-  const propertyPatch = absoluteCost(0.008, 5_000, 300_000);
-  const cyberResponse = absoluteCost(0.012, 7_500, 500_000);
-  const cyberOverhaul = absoluteCost(0.020, 12_000, 850_000);
-  const liabilitySettle = absoluteCost(0.015, 7_500, 750_000);
-  const liabilityDefense = absoluteCost(0.007, 5_000, 300_000);
-
-  const propertyTier = getBusinessInsuranceTier(biz, 'property');
-  const equipmentTier = getBusinessInsuranceTier(biz, 'equipment');
-  const cyberTier = getBusinessInsuranceTier(biz, 'cyber');
-  const liabilityTier = getBusinessInsuranceTier(biz, 'liability');
-
   const generic: BusinessPendingDecision[] = [
     {
       id: `crisis_supplier_${biz.id}_${globalWeek}`,
@@ -812,92 +792,7 @@ export function makeBusinessCrisis(biz: OwnedBusiness, globalWeek: number): Busi
     },
   ];
 
-  const operational: BusinessPendingDecision[] = [
-    {
-      id: `crisis_equipment_${biz.id}_${globalWeek}`,
-      kind: 'crisis',
-      title: 'Major Equipment Failure',
-      description: `Critical equipment at ${biz.name} has failed, disrupting normal operations.`,
-      icon: '🛠️',
-      insuranceArea: 'equipment',
-      insuranceTierAtCreation: equipmentTier,
-      createdGlobalWeek: globalWeek,
-      deadlineGlobalWeek: globalWeek + 3,
-      defaultChoiceId: 'limp_along',
-      choices: [
-        { id: 'replace', text: 'Replace Immediately', description: 'Restore dependable capacity quickly.', businessCashCost: equipmentReplacement, cashCostScale: 'absolute', revenueMultiplier: 0.99, reputationDelta: 1, durationWeeks: 3 },
-        { id: 'repair', text: 'Emergency Repair', description: 'Cheaper fix with some continuing disruption.', businessCashCost: equipmentRepair, cashCostScale: 'absolute', revenueMultiplier: 0.94, expenseMultiplier: 1.03, durationWeeks: 5 },
-        { id: 'limp_along', text: 'Keep Operating', description: 'Avoid the immediate bill and accept severe disruption.', revenueMultiplier: 0.82, expenseMultiplier: 1.08, reputationDelta: -2, durationWeeks: 6 },
-      ],
-    },
-    {
-      id: `crisis_property_${biz.id}_${globalWeek}`,
-      kind: 'crisis',
-      title: 'Premises Damage',
-      description: `Part of ${biz.name}'s premises has suffered serious damage and requires remediation.`,
-      icon: '🏚️',
-      insuranceArea: 'property',
-      insuranceTierAtCreation: propertyTier,
-      createdGlobalWeek: globalWeek,
-      deadlineGlobalWeek: globalWeek + 3,
-      defaultChoiceId: 'restrict_area',
-      choices: [
-        { id: 'full_restore', text: 'Restore Properly', description: 'Repair the premises quickly and protect long-term standards.', businessCashCost: propertyRestore, cashCostScale: 'absolute', revenueMultiplier: 0.99, reputationDelta: 1, durationWeeks: 4 },
-        { id: 'temporary_patch', text: 'Temporary Repairs', description: 'Spend less now, but operate around continuing limitations.', businessCashCost: propertyPatch, cashCostScale: 'absolute', revenueMultiplier: 0.93, expenseMultiplier: 1.03, durationWeeks: 6 },
-        { id: 'restrict_area', text: 'Restrict Operations', description: 'Delay repairs and accept reduced capacity and customer experience.', revenueMultiplier: 0.84, reputationDelta: -3, durationWeeks: 6 },
-      ],
-    },
-    {
-      id: `crisis_cyber_${biz.id}_${globalWeek}`,
-      kind: 'crisis',
-      title: 'Payment / Systems Breach',
-      description: `${biz.name} has suffered a digital-security or payment-system incident.`,
-      icon: '🔐',
-      insuranceArea: 'cyber',
-      insuranceTierAtCreation: cyberTier,
-      createdGlobalWeek: globalWeek,
-      deadlineGlobalWeek: globalWeek + 3,
-      defaultChoiceId: 'internal_fix',
-      choices: [
-        { id: 'specialist_response', text: 'Hire Incident Specialists', description: 'Contain the breach and restore systems professionally.', businessCashCost: cyberResponse, cashCostScale: 'absolute', revenueMultiplier: 0.98, reputationDelta: 1, durationWeeks: 4 },
-        { id: 'security_overhaul', text: 'Full Security Overhaul', description: 'Spend more now to restore trust and reduce immediate disruption.', businessCashCost: cyberOverhaul, cashCostScale: 'absolute', revenueMultiplier: 0.99, expenseMultiplier: 1.01, reputationDelta: 2, durationWeeks: 5 },
-        { id: 'internal_fix', text: 'Handle Internally', description: 'Preserve cash but accept a longer outage and confidence hit.', revenueMultiplier: 0.84, reputationDelta: -4, durationWeeks: 6 },
-      ],
-    },
-    {
-      id: `crisis_liability_${biz.id}_${globalWeek}`,
-      kind: 'crisis',
-      title: 'Customer Liability Claim',
-      description: `A customer, client or third party has brought a material claim against ${biz.name}.`,
-      icon: '⚖️',
-      insuranceArea: 'liability',
-      insuranceTierAtCreation: liabilityTier,
-      createdGlobalWeek: globalWeek,
-      deadlineGlobalWeek: globalWeek + 3,
-      defaultChoiceId: 'deny_claim',
-      choices: [
-        { id: 'settle', text: 'Settle Responsibly', description: 'Resolve the claim and protect long-term reputation.', businessCashCost: liabilitySettle, cashCostScale: 'absolute', reputationDelta: 1, durationWeeks: 3 },
-        { id: 'legal_defense', text: 'Defend the Claim', description: 'Spend on legal defense with some continuing uncertainty.', businessCashCost: liabilityDefense, cashCostScale: 'absolute', revenueMultiplier: 0.97, expenseMultiplier: 1.02, durationWeeks: 5 },
-        { id: 'deny_claim', text: 'Deny and Delay', description: 'Avoid an immediate payment but accept brand and operating pressure.', revenueMultiplier: 0.92, expenseMultiplier: 1.04, reputationDelta: -4, durationWeeks: 7 },
-      ],
-    },
-  ];
-
-  const urgency = getBusinessReinvestmentUrgency(biz);
-  const weighted = [...generic, ...operational];
-  const preferredTitle = urgency === 'technology'
-    ? 'Payment / Systems Breach'
-    : urgency === 'premises'
-      ? 'Premises Damage'
-      : urgency === 'equipment'
-        ? 'Major Equipment Failure'
-        : null;
-  if (preferredTitle) {
-    const preferred = operational.find((candidate) => candidate.title === preferredTitle);
-    if (preferred) weighted.push(preferred, preferred);
-  }
-
-  return weighted[Math.floor(Math.random() * weighted.length)];
+  return generic[Math.floor(Math.random() * generic.length)];
 }
 
 export const MIN_EMPLOYEES_REQUIRED = 3;
@@ -969,6 +864,8 @@ const ADVERTISING_COSTS: Record<string, { weeklyCost: number; demandBoost: numbe
   aggressive: { weeklyCost: 1200, demandBoost: 0.36, reputationBoost: 0.70 },
 };
 
+const SMALL_BUSINESS_RECOVERY_TYPES = new Set(['coffee_shop', 'food_truck', 'digital_agency', 'auto_repair', 'real_estate_agency', 'bakery']);
+
 const BUSINESS_BALANCE_TUNING: Record<string, {
   highRepRevenueBonus: number;
   highRepExpenseRelief: number;
@@ -1009,7 +906,7 @@ export function getBusinessType(typeId: string) {
 
 export function getUpgrade(upgradeId: string) {
   const upgrade = (businessUpgradesData ?? []).find((u) => u?.id === upgradeId);
-  return upgrade ? { ...upgrade, revenueBoost: 0.02, reputationBoost: upgrade.reputationBoost * 0.75 } : undefined;
+  return upgrade ? { ...upgrade, cost: Math.round(upgrade.cost * 0.90), revenueBoost: Math.max(0.08, Math.min(0.16, upgrade.revenueBoost)), reputationBoost: upgrade.reputationBoost * 0.75 } : undefined;
 }
 
 export function getBusinessUpgradeWeeks(randomRoll = Math.random()): number {
@@ -1023,7 +920,7 @@ function getBusinessBalanceTuning(typeId: string, reputation: number) {
     return { revenueMultiplier: 1, expenseMultiplier: 1, variableExpenseMultiplier: 1 };
   }
   return {
-    revenueMultiplier: 1 + tuning.highRepRevenueBonus * highRepWeight,
+    revenueMultiplier: (SMALL_BUSINESS_RECOVERY_TYPES.has(typeId) ? 1.10 : 1) * (1 + tuning.highRepRevenueBonus * highRepWeight),
     expenseMultiplier: 1 - tuning.highRepExpenseRelief * highRepWeight,
     variableExpenseMultiplier: 1 - tuning.highRepVariableRelief * highRepWeight,
   };
@@ -1407,7 +1304,6 @@ export interface BusinessTickResult {
   ownershipDistributions: Array<{ ownerType: 'player' | 'child' | 'family_trust' | 'investor'; ownerId: string; ownerName: string; amount: number }>;
   taxRefund: number;
   newEvent: { businessName: string; eventTitle: string; icon: string } | null;
-  newRetention: { businessName: string; employeeName: string; type: string } | null;
 }
 
 export interface BusinessSimulationModifiers {
@@ -1444,7 +1340,7 @@ export function getBusinessRevenueCapacity(biz: OwnedBusiness): number {
   const compact = (type.maxEmployees ?? 4) <= 3 ? 1.18 : (type.maxEmployees ?? 6) <= 5 ? 1.45 : 1;
   return Math.max(1, type.baseWeeklyRevenue * 1.121 * compact * Math.max(1, Math.min(1000, biz.operatingScaleMultiplier ?? 1)) *
     pricing.demand * (1 + advertising.demandBoost) * (0.6 + biz.reputation / 100 * 0.8) * (1 - (type.competitionLevel ?? 0.5) * 0.15) *
-    pricing.revenue * Math.max(0.4, 0.4 + productivity * 0.14) * (employees.length > 12 ? 0.92 : 1) * buffs.productivityMult *
+    pricing.revenue * Math.max(0.4, 0.4 + productivity * 1.05 * 0.14) * (employees.length > 12 ? 0.92 : 1) * buffs.productivityMult *
     (1 + upgrades + locations) * (1 + biz.level * 0.1) * buffs.revenueMult);
 }
 
@@ -1457,7 +1353,7 @@ export function processBusinessWeek(
 ): BusinessTickResult {
   const type = getBusinessType(biz.typeId);
   if (!type) {
-    return { updatedBusiness: biz, weeklyRevenue: 0, weeklyExpenses: 0, weeklyProfit: 0, playerDividend: 0, ownershipDistributions: [], taxRefund: 0, newEvent: null, newRetention: null };
+    return { updatedBusiness: biz, weeklyRevenue: 0, weeklyExpenses: 0, weeklyProfit: 0, playerDividend: 0, ownershipDistributions: [], taxRefund: 0, newEvent: null };
   }
   const globalWeek = ((currentYear - 1) * 20) + currentWeek;
   const identityEffects = getBusinessIdentityEffects(biz);
@@ -1480,6 +1376,7 @@ export function processBusinessWeek(
         lastWeekExpenses: 0,
         lastWeekProfit: 0,
         lastExpenseBreakdown: null,
+        pendingRetention: null,
       },
       weeklyRevenue: 0,
       weeklyExpenses: 0,
@@ -1488,7 +1385,6 @@ export function processBusinessWeek(
       ownershipDistributions: [],
       taxRefund: 0,
       newEvent: null,
-      newRetention: null,
     };
   }
 
@@ -1633,11 +1529,13 @@ export function processBusinessWeek(
   const familyGovernanceSalaries = (biz.familyRoles ?? []).reduce((t, role) => t + (role.weeklySalary ?? 0), 0);
   const executiveSalaries = governanceEffects.executiveWeeklySalary;
   const corporateDepartmentPayroll = workforceTick.weeklyPayroll;
+  const discountedEmployeeSalaries = employeeSalaries * (1 - getSmallBusinessPayrollDiscount(biz));
+  // Keep starter-contract demand based on contractual wages so payroll savings remain savings.
   const normalSalaries = employeeSalaries + familyGovernanceSalaries + executiveSalaries + corporateDepartmentPayroll;
   // Startup wage support applies only to ordinary employees. Family governance
   // and professional executive appointments remain contractual.
   const salaries = Math.round(
-    employeeSalaries * (startupSupport ? 0.95 : 1)
+    discountedEmployeeSalaries * (startupSupport ? 0.95 : 1)
     + familyGovernanceSalaries
     + executiveSalaries
     + corporateDepartmentPayroll
@@ -1647,7 +1545,7 @@ export function processBusinessWeek(
   if (starterDemandWeight > 0) {
     // Local contracts taper smoothly; a level-up never removes all starting customers.
     const compactStarterSupport = (type.maxEmployees ?? 6) <= 3 ? 1.12 : (type.maxEmployees ?? 6) <= 5 ? 1.04 : 1;
-    const starterRevenue = getStartupRevenueTarget(fullBaseExp * eventExpenseMultiplier, fullBaseRent, normalSalaries, adCost, Math.random()) * compactStarterSupport;
+    const starterRevenue = getStartupRevenueTarget(fullBaseExp * eventExpenseMultiplier, fullBaseRent, normalSalaries, adCost, Math.random()) * compactStarterSupport * (SMALL_BUSINESS_RECOVERY_TYPES.has(type.id) ? 1.10 : 1);
     revenue += Math.max(0, starterRevenue - revenue) * starterDemandWeight;
     revScale = baseRev > 0 ? revenue / baseRev : 1;
     variableScale = 0.6 + 0.4 * Math.min(6, revScale);
@@ -1664,11 +1562,10 @@ export function processBusinessWeek(
   // COGS and delivery costs rise with scale, preventing unrealistically large
   // margins once employee and upgrade multipliers compound.
   let cogs = Math.round(Math.max(baseExp * 0.45, revenue * 0.17 * balanceTuning.variableExpenseMultiplier) * eventExpenseMultiplier * buffAgg.expenseMult);
-  // Utilities/maintenance/misc scale moderately, insurance is mostly fixed
+  // Utilities, maintenance and miscellaneous costs scale moderately.
   let utilities = Math.round(baseExp * 0.15 * variableScale * eventExpenseMultiplier * buffAgg.expenseMult);
-  const explicitInsurancePremium = getBusinessInsuranceTotalWeeklyPremium(workforceBiz, globalWeek);
-  let baseInsurance = Math.round(baseExp * 0.10 * (0.8 + 0.2 * variableScale) * eventExpenseMultiplier * buffAgg.expenseMult);
-  let insurance = baseInsurance + explicitInsurancePremium;
+  // Retired policies remain readable in old saves but never charge premiums.
+  const insurance = 0;
   let maintenance = Math.round(baseExp * 0.15 * variableScale * eventExpenseMultiplier * buffAgg.expenseMult);
   const locationOperatingCosts = Math.round((biz.locations ?? []).reduce((total, location) => total + (location.weeklyOperatingCost ?? 0), 0) * inflationMultiplier * prestigeCostMultiplier);
   let baseMisc = Math.round(baseExp * 0.15 * variableScale * eventExpenseMultiplier * buffAgg.expenseMult)
@@ -1685,15 +1582,13 @@ export function processBusinessWeek(
     const volume = Math.max(0, revenue / (quotedRevenue * inflationRatio));
     const expenseBuffChange = buffAgg.expenseMult / Math.max(0.01, acquisition.referenceExpenseMultiplier!);
     const overhead = Math.round(operatingBudget * inflationRatio * (0.6 + 0.4 * volume) * prestigeCostMultiplier * eventExpenseMultiplier * expenseBuffChange);
-    const originalOverhead = Math.max(1, rent + cogs + utilities + baseInsurance + maintenance + baseMisc - locationOperatingCosts);
+    const originalOverhead = Math.max(1, rent + cogs + utilities + maintenance + baseMisc - locationOperatingCosts);
     const scale = overhead / originalOverhead;
     rent = Math.round(rent * scale);
     cogs = Math.round(cogs * scale);
     utilities = Math.round(utilities * scale);
-    baseInsurance = Math.round(baseInsurance * scale);
-    insurance = baseInsurance + explicitInsurancePremium;
     maintenance = Math.round(maintenance * scale);
-    baseMisc = Math.max(0, overhead - rent - cogs - utilities - baseInsurance - maintenance) + locationOperatingCosts;
+    baseMisc = Math.max(0, overhead - rent - cogs - utilities - maintenance) + locationOperatingCosts;
     misc = baseMisc;
   }
 
@@ -1914,21 +1809,6 @@ export function processBusinessWeek(
     };
   });
 
-  // Retention events should stay meaningful even in a 10-company empire.
-  // Only established/key employees are eligible and the weekly chance is intentionally low.
-  let newRetention: { businessName: string; employeeName: string; type: string } | null = null;
-  let pendingRetention = biz.pendingRetention ?? null;
-  const retentionCandidates = updatedEmployees.filter((employee) =>
-    (employee.skill ?? 0) > 60 || (employee.experience ?? 0) > 100
-  );
-  if (!pendingRetention && retentionCandidates.length > 0 && Math.random() < 0.01) {
-    const emp = retentionCandidates[Math.floor(Math.random() * retentionCandidates.length)];
-    const types: Array<'poach' | 'raise' | 'promotion' | 'training'> = ['poach', 'raise', 'promotion', 'training'];
-    const type = types[Math.floor(Math.random() * types.length)];
-    pendingRetention = { employeeId: emp.id, type };
-    newRetention = { businessName: biz.name, employeeName: emp.name, type };
-  }
-
   // Level check
   const thresholds = scaleValuationTargets(type.levelThresholds ?? [0]);
   const valuationProfitHistory = [...(biz.weeklyProfitHistory ?? []), profit].slice(-52);
@@ -2013,7 +1893,7 @@ export function processBusinessWeek(
   // Recruit charge accrual: +1 charge every 5 weeks worked, max 5
   let recruitProgress = (biz.recruitProgress ?? 0) + 1;
   let recruitCharges = biz.recruitCharges ?? 0;
-  if (recruitProgress >= 5 && recruitCharges < 5) {
+  if (recruitProgress >= getRecruitmentWaitWeeks(biz) && recruitCharges < 5) {
     recruitCharges += 1;
     recruitProgress = 0;
   } else if (recruitCharges >= 5) {
@@ -2388,7 +2268,7 @@ export function processBusinessWeek(
     weeklyRevenueHistory: revHistory,
     annualProfit,
     annualProfitYear,
-    pendingRetention,
+    pendingRetention: null,
     freeRecruits: biz.freeRecruits ?? 3,
     recruitCharges,
     recruitProgress,
@@ -2431,14 +2311,14 @@ export function processBusinessWeek(
     totalPlayerDistributions: (biz.totalPlayerDistributions ?? 0) + playerDividend,
   };
   updatedBusiness.valuation = calculateValuation(updatedBusiness);
-  if (!updatedBusiness.corporateWorkforce && updatedBusiness.valuation >= CORPORATE_WORKFORCE_UNLOCK_VALUATION) {
+  updatedBusiness.level = getBusinessLevelForMetrics(thresholds, updatedBusiness.valuation, updatedBusiness.reputation);
+  if (!updatedBusiness.corporateWorkforce && canUnlockCorporateWorkforce(updatedBusiness)) {
     updatedBusiness.corporateWorkforce = createCorporateWorkforce(
       updatedBusiness,
       globalWeek,
       inflationMultiplier,
     );
   }
-  updatedBusiness.level = getBusinessLevelForMetrics(thresholds, updatedBusiness.valuation, updatedBusiness.reputation);
   updatedBusiness = closeCompletedBusinessManagementQuarter(updatedBusiness, globalWeek);
   updatedBusiness.managementTargets = ensureBusinessManagementTargetPlan(updatedBusiness, globalWeek);
 
@@ -2474,7 +2354,6 @@ export function processBusinessWeek(
     ownershipDistributions,
     taxRefund,
     newEvent,
-    newRetention,
   };
 }
 
@@ -2595,70 +2474,6 @@ export function startTraining(biz: OwnedBusiness, employeeId: string, trainingId
     ),
   };
   return { updatedBusiness: updated, cost };
-}
-
-/** Resolve a pending retention event with player choice */
-export function resolveRetention(
-  biz: OwnedBusiness,
-  choice: 'accept' | 'match_salary' | 'increase_salary' | 'promote' | 'let_go' | 'training' | 'deny',
-): { updatedBusiness: OwnedBusiness; costDelta: number; salaryDelta: number } {
-  const ret = biz.pendingRetention;
-  if (!ret) return { updatedBusiness: biz, costDelta: 0, salaryDelta: 0 };
-
-  let updatedEmployees = biz.employees ?? [];
-  let costDelta = 0;
-  let salaryDelta = 0;
-
-  const idx = updatedEmployees.findIndex((e) => e.id === ret.employeeId);
-  if (idx < 0) return { updatedBusiness: { ...biz, pendingRetention: null }, costDelta: 0, salaryDelta: 0 };
-
-  const emp = updatedEmployees[idx];
-
-  if (ret.type === 'poach') {
-    if (choice === 'match_salary') {
-      const bump = Math.round(emp.weeklySalary * 0.15);
-      updatedEmployees = updatedEmployees.map((e, i) => i === idx ? { ...e, weeklySalary: e.weeklySalary + bump, morale: Math.min(100, e.morale + 10) } : e);
-      salaryDelta = bump;
-    } else if (choice === 'increase_salary') {
-      const bump = Math.round(emp.weeklySalary * 0.25);
-      updatedEmployees = updatedEmployees.map((e, i) => i === idx ? { ...e, weeklySalary: e.weeklySalary + bump, morale: Math.min(100, e.morale + 20) } : e);
-      salaryDelta = bump;
-    } else if (choice === 'promote') {
-      // Increase salary 20% and morale
-      updatedEmployees = updatedEmployees.map((e, i) => i === idx ? { ...e, weeklySalary: Math.round(e.weeklySalary * 1.2), morale: Math.min(100, e.morale + 25) } : e);
-      salaryDelta = Math.round(emp.weeklySalary * 0.2);
-    } else if (choice === 'let_go') {
-      updatedEmployees = updatedEmployees.filter((_, i) => i !== idx);
-    }
-  } else if (ret.type === 'raise') {
-    if (choice === 'accept') {
-      const bump = Math.round(emp.weeklySalary * 0.15);
-      updatedEmployees = updatedEmployees.map((e, i) => i === idx ? { ...e, weeklySalary: e.weeklySalary + bump, morale: Math.min(100, e.morale + 15) } : e);
-      salaryDelta = bump;
-    } else if (choice === 'deny') {
-      updatedEmployees = updatedEmployees.map((e, i) => i === idx ? { ...e, morale: Math.max(10, e.morale - 20) } : e);
-    }
-  } else if (ret.type === 'promotion') {
-    if (choice === 'promote') {
-      updatedEmployees = updatedEmployees.map((e, i) => i === idx ? { ...e, weeklySalary: Math.round(e.weeklySalary * 1.25), morale: Math.min(100, e.morale + 20) } : e);
-      salaryDelta = Math.round(emp.weeklySalary * 0.25);
-    } else if (choice === 'deny') {
-      updatedEmployees = updatedEmployees.map((e, i) => i === idx ? { ...e, morale: Math.max(10, e.morale - 15) } : e);
-    }
-  } else if (ret.type === 'training') {
-    if (choice === 'accept') {
-      costDelta = 5000;
-      updatedEmployees = updatedEmployees.map((e, i) => i === idx ? { ...e, skill: Math.min(e.potential ?? 100, Math.min(100, e.skill + 12)), morale: Math.min(100, e.morale + 10) } : e);
-    } else if (choice === 'deny') {
-      updatedEmployees = updatedEmployees.map((e, i) => i === idx ? { ...e, morale: Math.max(10, e.morale - 8) } : e);
-    }
-  }
-
-  return {
-    updatedBusiness: { ...biz, employees: updatedEmployees, pendingRetention: null },
-    costDelta,
-    salaryDelta,
-  };
 }
 
 /** Compute market share for a business relative to procedural competitors */
@@ -2877,6 +2692,7 @@ export function applyDelegatedBusinessRoutine(
   let freeRecruits = biz.freeRecruits ?? 3;
   let recruitCharges = biz.recruitCharges ?? 0;
   let balance = biz.balance ?? 0;
+  let nextRecruitmentWeek = biz.nextRecruitmentWeek ?? 0;
   const maxEmployees = type.maxEmployees ?? employees.length;
   let targetStaffRatio = config.targetStaffRatio + managerEffectiveness.staffingAdjustment;
   if (macroCyclePhase === 'boom') {
@@ -2895,7 +2711,7 @@ export function applyDelegatedBusinessRoutine(
   );
 
   if (employees.length < targetEmployees && employees.length < maxEmployees && !(biz.pendingCandidates?.length)) {
-    const canUseRecruit = freeRecruits > 0 || (recruitCharges > 0 && balance >= 10_000);
+    const canUseRecruit = freeRecruits > 0 || (getRecruitmentCooldown(biz, globalWeek) === 0 && recruitCharges > 0 && balance >= 10_000);
     if (canUseRecruit) {
       const roleId = employees.length < MIN_EMPLOYEES_REQUIRED ? 'worker' : 'skilled_worker';
       const candidates = generateCandidates(roleId, employees.map((employee) => employee.name), inflationMultiplier);
@@ -2911,6 +2727,7 @@ export function applyDelegatedBusinessRoutine(
           balance -= 10_000;
         }
         employees.push(candidateToEmployee(candidate));
+        if (freeRecruits === 0) nextRecruitmentWeek = globalWeek + getRecruitmentWaitWeeks(biz);
         notes.push(`hired ${candidate.name}`);
       }
     }
@@ -2924,6 +2741,7 @@ export function applyDelegatedBusinessRoutine(
     freeRecruits,
     recruitCharges,
     balance,
+    nextRecruitmentWeek,
     lastDelegationReviewWeek: globalWeek,
     lastDelegationSummary: notes.join(' • ') || 'Routine management review completed.',
     timeline: [
@@ -2955,7 +2773,6 @@ export function processAllBusinesses(
   holdingCashFlows: Array<{ holdingCompanyId: string; dividends: number; managementFees: number }>;
   totalTaxRefund: number;
   events: { businessName: string; eventTitle: string; icon: string }[];
-  retentionEvents: { businessName: string; employeeName: string; type: string }[];
 } {
   let totalProfit = 0;
   let totalDividend = 0;
@@ -2963,7 +2780,6 @@ export function processAllBusinesses(
   const ownershipDistributions: BusinessTickResult['ownershipDistributions'] = [];
   const holdingCashFlowMap = new Map<string, { dividends: number; managementFees: number }>();
   const events: { businessName: string; eventTitle: string; icon: string }[] = [];
-  const retentionEvents: { businessName: string; employeeName: string; type: string }[] = [];
   const updatedBusinesses: OwnedBusiness[] = [];
   const globalWeek = ((currentYear - 1) * 20) + currentWeek;
   let createdDecisionThisWeek = false;
@@ -3052,7 +2868,6 @@ export function processAllBusinesses(
     ownershipDistributions.push(...result.ownershipDistributions);
     totalTaxRefund += result.taxRefund;
     if (result.newEvent) events.push(result.newEvent);
-    if (result.newRetention) retentionEvents.push(result.newRetention);
   }
 
   const holdingCashFlows = [...holdingCashFlowMap.entries()].map(([holdingCompanyId, flow]) => ({
@@ -3060,7 +2875,7 @@ export function processAllBusinesses(
     dividends: Math.round(flow.dividends),
     managementFees: Math.round(flow.managementFees),
   }));
-  return { updatedBusinesses, totalProfit, totalDividend, ownershipDistributions, holdingCashFlows, totalTaxRefund, events, retentionEvents };
+  return { updatedBusinesses, totalProfit, totalDividend, ownershipDistributions, holdingCashFlows, totalTaxRefund, events };
 }
 
 export function getTotalBusinessValue(businesses: OwnedBusiness[]): number {

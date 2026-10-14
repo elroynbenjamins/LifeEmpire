@@ -1,3 +1,4 @@
+import { playBusinessBotWeek, BusinessBotPolicy, BusinessBotAction } from './businessBot';
 import { BusinessEmployee, EmployeeTier, OwnedBusiness } from '../types/game';
 import businessTypesData from '../data/business_types.json';
 import employeeRolesData from '../data/employee_roles.json';
@@ -20,10 +21,13 @@ export interface BusinessSimulationScenario {
   advertising?: OwnedBusiness['advertisingLevel'];
   prestigeBusinessCostReduction?: number;
   competition?: boolean;
+  bot?: BusinessBotPolicy;
+  botUpgradeLimit?: number;
 }
 
 export interface BusinessSimulationResult {
   scenario: BusinessSimulationScenario;
+  botActions: BusinessBotAction[];
   endingBusiness: OwnedBusiness;
   totalRevenue: number;
   totalExpenses: number;
@@ -96,12 +100,19 @@ export function simulateBusinessScenario(scenario: BusinessSimulationScenario): 
     let rivals = { [business.id]: createInitialCompetitors(business, 1) };
 
     const profits: number[] = [];
+    const botActions: BusinessBotAction[] = [];
     let totalRevenue = 0, totalExpenses = 0, cumulativeProfit = 0;
     let lowestBalance = business.balance, firstBreakEvenWeek: number | null = null;
     for (let index = 0; index < scenario.weeks; index++) {
       const globalWeek = index + 2;
       const week = ((globalWeek - 1) % 20) + 1;
       const year = Math.floor((globalWeek - 1) / 20) + 1;
+      if (scenario.bot) {
+        const decision = playBusinessBotWeek(business, scenario.bot, globalWeek, scenario.botUpgradeLimit);
+        business = decision.business;
+        botActions.push(...decision.actions);
+        lowestBalance = Math.min(lowestBalance, business.balance);
+      }
       const competition = scenario.competition ? processCompetitors([business], rivals, globalWeek) : null;
       if (competition) rivals = competition.updatedCompetitors;
       const tick = processBusinessWeek(business, 1, week, year, { businessCostReduction: scenario.prestigeBusinessCostReduction ?? 0, competitorRevenueMultipliers: competition?.competitorRevenueMultipliers });
@@ -114,7 +125,7 @@ export function simulateBusinessScenario(scenario: BusinessSimulationScenario): 
       if (firstBreakEvenWeek === null && cumulativeProfit >= 0) firstBreakEvenWeek = index + 1;
     }
     return {
-      scenario, endingBusiness: business, totalRevenue, totalExpenses, totalProfit: cumulativeProfit,
+      scenario, botActions, endingBusiness: business, totalRevenue, totalExpenses, totalProfit: cumulativeProfit,
       medianWeeklyProfit: median(profits), profitMargin: totalRevenue > 0 ? cumulativeProfit / totalRevenue : 0,
       profitableWeekRate: profits.filter((profit) => profit > 0).length / Math.max(1, profits.length),
       lowestBalance, endingBalance: business.balance, endingValuation: business.valuation, endingReputation: business.reputation, firstBreakEvenWeek,

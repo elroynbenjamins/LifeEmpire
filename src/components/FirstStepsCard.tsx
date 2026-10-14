@@ -20,7 +20,7 @@ export default function FirstStepsCard() {
     pendingCarDelivery: s.pendingCarDelivery,
   })));
   const journey = getFirstLifeJourney(state);
-  // Guided lessons do not expire at Year 2, unlike the live Year-1 goal card.
+  // Keep the opening replay available after the first career is established.
   if (!journey.visible) return <TutorialLauncher resumeOnly />;
   const current = journey.current;
   return (

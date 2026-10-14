@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '../src/theme/colors';
 import GameCard from '../src/components/GameCard';
+import FeatureTourModal from '../src/components/FeatureTourModal';
+import { useTutorialScreenBlocker } from '../src/components/TutorialChapterLauncher';
 import ScreenHeader from '../src/components/ScreenHeader';
 import ScreenTabs from '../src/components/ScreenTabs';
 import StatusPill from '../src/components/StatusPill';
@@ -32,6 +34,8 @@ export default function PropertiesScreen() {
   const togglePropertyRental = useGameStore((s) => s?.togglePropertyRental);
   const renovatePropertyAction = useGameStore((s) => s?.renovatePropertyAction);
   const [tab, setTab] = useState<'owned' | 'listings' | 'auctions'>(properties.length > 0 ? 'owned' : 'listings');
+  const [showTour, setShowTour] = useState(false);
+  useTutorialScreenBlocker(showTour);
   const cyclePhase = economicCycle?.phase ?? 'expansion';
   const cycleEffects = getEconomicCycleEffects(cyclePhase);
   const propertyPurchaseMultiplier = getPropertyCyclePurchaseMultiplier(cyclePhase);
@@ -50,6 +54,7 @@ export default function PropertiesScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
         title="Real Estate"
+        right={<Pressable accessibilityRole="button" accessibilityLabel="Property basics" onPress={() => setShowTour(true)}><Ionicons name="help-circle-outline" size={24} color={Colors.info} /></Pressable>}
         subtitle="Property portfolio, listings and auctions"
         showBack
         onBack={() => router.back()}
@@ -326,6 +331,11 @@ export default function PropertiesScreen() {
           )}
         </>}
       </ScrollView>
+      <FeatureTourModal visible={showTour} title="Property basics" onClose={() => setShowTour(false)} steps={[
+        { title: 'Property comes after your cash buffer', body: 'Real estate is optional. Compare the full purchase price with the cash you need for living costs and business funding. Your personal home is managed separately in Lifestyle.', icon: 'home-outline' },
+        { title: 'Rent is not the purchase price', body: 'After buying, check whether the property is rented out. Rental income arrives as weeks advance. Review condition, renovation costs and the current economy before expanding.', icon: 'cash-outline' },
+        { title: 'Auctions can wait', body: 'Listings are the simpler starting point. Auctions commit money to a bid; inspect the property and review the confirmation before bidding. Nothing in this tour requires a purchase.', icon: 'hammer-outline' },
+      ]} />
     </SafeAreaView>
   );
 }

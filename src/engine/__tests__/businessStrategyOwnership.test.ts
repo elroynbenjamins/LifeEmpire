@@ -60,6 +60,7 @@ describe('business strategy, crises and ownership', () => {
 
   test('spaces corporate HR and strategic reviews by at least 6 weeks', () => {
     const business = staffedBusiness();
+    business.level = 6;
     business.valuation = 30_000_000;
     const workforce = createCorporateWorkforce(business, 1, 1);
     expect(workforce).not.toBeNull();

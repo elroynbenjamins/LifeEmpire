@@ -156,7 +156,7 @@ describe('corporate management action guidance', () => {
     expect(actions.some((item) => item.id === 'increase-debt-paydown-budget')).toBe(true);
   });
 
-  test('maintenance warning recommends the lowest-condition renewal', () => {
+  test('retired maintenance does not recommend renewal', () => {
     const business = corporateBusiness();
     business.reinvestment = {
       technology: { condition: 70, lastRenewedGlobalWeek: 1 },
@@ -168,10 +168,8 @@ describe('corporate management action guidance', () => {
     const actions = getCorporateManagementActions(business, report, 1);
     const upkeep = actions.find((item) => item.id === 'renew-lowest-condition-area');
 
-    expect(report.maintenanceStatus).toBe('watch');
-    expect(upkeep?.title).toContain('Equipment Renewal');
-    expect(upkeep?.detail).toContain('42%');
-    expect(upkeep?.target).toBe('maintenance');
+    expect(report.maintenanceStatus).toBe('healthy');
+    expect(upkeep).toBeUndefined();
   });
 
   test('high payroll with oversized targets recommends reducing future hiring before cuts', () => {
@@ -237,9 +235,9 @@ describe('corporate management action guidance', () => {
 
     expect(actions).toHaveLength(3);
     expect(new Set(actions.map((item) => item.target))).toEqual(
-      new Set(['workforce', 'finance', 'maintenance']),
+      new Set(['workforce', 'finance', 'budget']),
     );
-    expect(actions.some((item) => item.id === 'increase-debt-paydown-budget')).toBe(false);
+    expect(actions.some((item) => item.id === 'increase-debt-paydown-budget')).toBe(true);
   });
 
   test('healthy reports do not manufacture management actions', () => {

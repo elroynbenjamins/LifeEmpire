@@ -164,14 +164,14 @@ describe('corporate management reporting', () => {
     expect(report.payrollStatus).toBe('critical');
     expect(report.turnoverStatus).toBe('watch');
     expect(report.debtCoverageStatus).toBe('critical');
-    expect(report.maintenanceStatus).toBe('watch');
+    expect(report.maintenanceStatus).toBe('healthy');
+    expect(warningIds).not.toContain('maintenance');
     expect(report.productivityStatus).toBe('watch');
     expect(warningIds).toEqual(expect.arrayContaining([
       'department-productivity',
       'payroll-ratio',
       'turnover',
       'debt-coverage',
-      'maintenance',
     ]));
     expect(report.overallStatus).toBe('critical');
   });
@@ -354,8 +354,8 @@ describe('corporate management reporting', () => {
     expect(snapshot?.averageDepartmentMorale).toBeDefined();
     expect(snapshot?.employeeRelations).toBe(61);
     expect(snapshot?.cashAvailableForDebtService).toBeDefined();
-    expect(snapshot?.maintenanceRevenuePenalty).toBeGreaterThan(0);
-    expect(snapshot?.maintenanceExpenseIncrease).toBeGreaterThan(0);
+    expect(snapshot?.maintenanceRevenuePenalty).toBe(0);
+    expect(snapshot?.maintenanceExpenseIncrease).toBe(0);
     expect(snapshot?.reputation).toBe(80);
   });
 

@@ -7,6 +7,9 @@ import businessTypesData from '../data/business_types.json';
 import { getBusinessGovernanceEffects } from './businessGovernanceEngine';
 import { getCorporateWorkforceEffects } from './businessWorkforceEngine';
 
+// Retain legacy save fields and finish paid projects, but suspend the upkeep system.
+export const BUSINESS_UPKEEP_ENABLED: boolean = false;
+
 function getBusinessType(typeId: string) {
   return (businessTypesData as any[]).find((type) => type?.id === typeId);
 }
@@ -152,7 +155,7 @@ export function tickBusinessReinvestment(
   };
 
   for (const area of Object.keys(BUSINESS_REINVESTMENT_AREAS) as BusinessReinvestmentArea[]) {
-    if (active?.area === area) continue;
+    if (!BUSINESS_UPKEEP_ENABLED || active?.area === area) continue;
     const definition = BUSINESS_REINVESTMENT_AREAS[area];
     const governance = getBusinessGovernanceEffects(business);
     const executiveReduction = area === 'technology'
@@ -196,6 +199,7 @@ function conditionDeficit(condition: number, threshold: number): number {
 }
 
 export function getBusinessReinvestmentEffects(business: OwnedBusiness) {
+  if (!BUSINESS_UPKEEP_ENABLED) return { revenuePenalty: 0, expenseIncrease: 0, crisisIncrease: 0, reputationDrag: 0, averageCondition: 100 };
   const state = normalizeBusinessReinvestmentState(business.reinvestment, 1);
   const technologyDeficit = conditionDeficit(state.technology.condition, 75);
   const premisesDeficit = conditionDeficit(state.premises.condition, 75);
@@ -252,6 +256,7 @@ export function canStartBusinessReinvestment(
   business: OwnedBusiness,
   area: BusinessReinvestmentArea,
 ): { allowed: boolean; reason: string | null } {
+  if (!BUSINESS_UPKEEP_ENABLED) return { allowed: false, reason: 'Business upkeep is currently disabled.' };
   if (business.activeReinvestment) {
     return { allowed: false, reason: 'Another reinvestment project is already in progress.' };
   }
@@ -273,6 +278,7 @@ export function getBusinessConditionLabel(condition: number): {
 }
 
 export function getBusinessReinvestmentUrgency(business: OwnedBusiness): BusinessReinvestmentArea | null {
+  if (!BUSINESS_UPKEEP_ENABLED) return null;
   const state = normalizeBusinessReinvestmentState(business.reinvestment, 1);
   const entries = (Object.keys(BUSINESS_REINVESTMENT_AREAS) as BusinessReinvestmentArea[])
     .map((area) => ({ area, condition: state[area].condition }))

@@ -5,6 +5,7 @@ import {
 } from '../businessEngine';
 import {
   CORPORATE_WORKFORCE_UNLOCK_VALUATION,
+  CORPORATE_WORKFORCE_UNLOCK_LEVEL,
   createCorporateWorkforce,
   getCorporateWorkforceAttentionReason,
   getCorporateWorkforceEffects,
@@ -66,9 +67,13 @@ describe('corporate department workforce', () => {
     jest.restoreAllMocks();
   });
 
-  test('corporate workforce unlocks at €25M and scales gradually with valuation', () => {
+  test('corporate workforce needs level 6 and €25M, then scales with valuation', () => {
     expect(CORPORATE_WORKFORCE_UNLOCK_VALUATION).toBe(25_000_000);
+    expect(CORPORATE_WORKFORCE_UNLOCK_LEVEL).toBe(6);
     expect(getRecommendedCorporateHeadcount(makeCorporateBusiness({ valuation: 24_999_999, corporateWorkforce: null }))).toBe(0);
+    expect(getRecommendedCorporateHeadcount(makeCorporateBusiness({ level: 5, valuation: 25_000_000, corporateWorkforce: null }))).toBe(0);
+    expect(createCorporateWorkforce(makeCorporateBusiness({ level: 5, corporateWorkforce: null }), 81, 1)).toBeNull();
+    expect(createCorporateWorkforce(makeCorporateBusiness({ level: 6, corporateWorkforce: null }), 81, 1)).not.toBeNull();
 
     const at25 = getRecommendedCorporateHeadcount(makeCorporateBusiness({ valuation: 25_000_000, corporateWorkforce: null }));
     const at100 = getRecommendedCorporateHeadcount(makeCorporateBusiness({ valuation: 100_000_000, corporateWorkforce: null }));
@@ -263,8 +268,8 @@ describe('corporate department workforce', () => {
     const healthyTick = tickBusinessReinvestment(healthy, 90);
     const weakTick = tickBusinessReinvestment(weak, 90);
 
-    expect(weakTick.reinvestment.technology.condition).toBeLessThan(healthyTick.reinvestment.technology.condition);
-    expect(weakTick.reinvestment.equipment.condition).toBeLessThan(healthyTick.reinvestment.equipment.condition);
+    expect(weakTick.reinvestment.technology.condition).toBe(healthyTick.reinvestment.technology.condition);
+    expect(weakTick.reinvestment.equipment.condition).toBe(healthyTick.reinvestment.equipment.condition);
   });
 
   test('corporate departments replace the small-business three-person operating minimum', () => {

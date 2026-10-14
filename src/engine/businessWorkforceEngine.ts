@@ -12,6 +12,12 @@ import {
 import businessTypesData from '../data/business_types.json';
 
 export const CORPORATE_WORKFORCE_UNLOCK_VALUATION = 25_000_000;
+export const CORPORATE_WORKFORCE_UNLOCK_LEVEL = 6;
+
+export function canUnlockCorporateWorkforce(business: OwnedBusiness): boolean {
+  return (business.level ?? 0) >= CORPORATE_WORKFORCE_UNLOCK_LEVEL
+    && (business.valuation ?? 0) >= CORPORATE_WORKFORCE_UNLOCK_VALUATION;
+}
 
 export const CORPORATE_COMPENSATION_POLICIES: Record<CorporateCompensationPolicy, {
   id: CorporateCompensationPolicy;
@@ -209,7 +215,7 @@ function normalizedMix(business: OwnedBusiness): Record<CorporateDepartmentId, n
 }
 
 export function getRecommendedCorporateHeadcount(business: OwnedBusiness): number {
-  if ((business.valuation ?? 0) < CORPORATE_WORKFORCE_UNLOCK_VALUATION && !business.corporateWorkforce) return 0;
+  if (!canUnlockCorporateWorkforce(business) && !business.corporateWorkforce) return 0;
   const valuationMillions = Math.max(1, (business.valuation ?? 0) / 1_000_000);
   return Math.round(clamp(30 + Math.sqrt(valuationMillions) * 12, 60, 1_200));
 }
@@ -286,7 +292,7 @@ export function createCorporateWorkforce(
   globalWeek: number,
   inflationMultiplier = 1,
 ): CorporateWorkforceState | null {
-  if ((business.valuation ?? 0) < CORPORATE_WORKFORCE_UNLOCK_VALUATION) return null;
+  if (!canUnlockCorporateWorkforce(business)) return null;
   const recommended = getRecommendedDepartmentHeadcounts(business);
   return {
     initializedGlobalWeek: Math.max(1, globalWeek),
@@ -1058,7 +1064,7 @@ export function makeCorporateHrDecision(
 }
 
 export function getCorporateWorkforceAttentionReason(business: OwnedBusiness): string | null {
-  if ((business.valuation ?? 0) >= CORPORATE_WORKFORCE_UNLOCK_VALUATION && !business.corporateWorkforce) {
+  if (canUnlockCorporateWorkforce(business) && !business.corporateWorkforce) {
     return 'Corporate workforce structure has not been established.';
   }
   if (!business.corporateWorkforce) return null;

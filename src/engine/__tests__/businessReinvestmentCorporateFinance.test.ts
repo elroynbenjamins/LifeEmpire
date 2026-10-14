@@ -47,7 +47,7 @@ describe('business reinvestment and corporate financing', () => {
     expect(Object.keys(BUSINESS_REINVESTMENT_AREAS)).toEqual(['technology', 'premises', 'equipment']);
   });
 
-  test('business infrastructure wears gradually and urgency starts below 75 condition', () => {
+  test('disabled business infrastructure retains condition without urgency', () => {
     const business = makeBusiness();
     let current = business;
     for (let week = 42; week <= 90; week += 1) {
@@ -59,12 +59,12 @@ describe('business reinvestment and corporate financing', () => {
       };
     }
 
-    expect(current.reinvestment!.technology.condition).toBeLessThan(75);
-    expect(getBusinessReinvestmentUrgency(current)).not.toBeNull();
-    expect(getBusinessConditionLabel(current.reinvestment!.technology.condition).label).not.toBe('Current');
+    expect(current.reinvestment!.technology.condition).toBe(100);
+    expect(getBusinessReinvestmentUrgency(current)).toBeNull();
+    expect(getBusinessConditionLabel(current.reinvestment!.technology.condition).label).toBe('Current');
   });
 
-  test('neglected reinvestment creates meaningful but capped operating drag', () => {
+  test('legacy neglected infrastructure has no operating drag', () => {
     const business = makeBusiness({
       reinvestment: {
         technology: { condition: 20, lastRenewedGlobalWeek: 1 },
@@ -74,9 +74,9 @@ describe('business reinvestment and corporate financing', () => {
     });
     const effects = getBusinessReinvestmentEffects(business);
 
-    expect(effects.revenuePenalty).toBeGreaterThan(0.10);
+    expect(effects.revenuePenalty).toBe(0);
     expect(effects.revenuePenalty).toBeLessThanOrEqual(0.15);
-    expect(effects.expenseIncrease).toBeGreaterThan(0.08);
+    expect(effects.expenseIncrease).toBe(0);
     expect(effects.expenseIncrease).toBeLessThanOrEqual(0.12);
     expect(effects.crisisIncrease).toBeLessThanOrEqual(0.10);
   });
@@ -128,7 +128,7 @@ describe('business reinvestment and corporate financing', () => {
     const healthyWeek = processBusinessWeek(base, 1, 5, 3);
     const neglectedWeek = processBusinessWeek(neglected, 1, 5, 3);
 
-    expect(neglectedWeek.weeklyRevenue).toBeLessThan(healthyWeek.weeklyRevenue);
+    expect(neglectedWeek.weeklyRevenue).toBe(healthyWeek.weeklyRevenue);
   });
 
   test('reinvestment cannot be spammed at pristine condition and completes back at 100', () => {

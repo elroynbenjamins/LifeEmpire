@@ -11,6 +11,7 @@ import {
 import { getCorporateWeeklyDebtService } from './corporateFinanceEngine';
 import { getBusinessDebtPrincipal, getBusinessWeeklyInterestExpense } from './businessDebtEngine';
 import {
+  BUSINESS_UPKEEP_ENABLED,
   BUSINESS_REINVESTMENT_AREAS,
   getBusinessReinvestmentCost,
   getBusinessReinvestmentEffects,
@@ -195,6 +196,7 @@ function getPreviousBounds(globalWeek: number, period: CorporateReportPeriod) {
 }
 
 function getMaintenanceBacklog(business: OwnedBusiness, inflationMultiplier = 1) {
+  if (!BUSINESS_UPKEEP_ENABLED) return { averageCondition: 100, backlog: 0 };
   const state = normalizeBusinessReinvestmentState(business.reinvestment, 1);
   const averageCondition = (
     state.technology.condition

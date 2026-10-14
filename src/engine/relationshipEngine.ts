@@ -1415,21 +1415,6 @@ function createChild(state: GameState): RelationshipChild {
 }
 
 
-function sharedGoalProgress(state: GameState): number {
-  const goal = state.relationshipState?.sharedGoal;
-  if (!goal) return 0;
-  if (goal.type === 'cash_buffer') return Math.max(0, state.cash ?? 0);
-  if (goal.type === 'net_worth') return Math.max(0, getNetWorth(state));
-  if (goal.type === 'better_home') {
-    const order = ['cheap_apartment', 'studio_apartment', 'small_house', 'family_house', 'luxury_villa', 'mansion'];
-    return Math.max(0, order.indexOf(state.currentHousingId));
-  }
-  if (goal.type === 'family_fund') {
-    return (state.relationshipState?.children ?? []).reduce((sum, child) => sum + (child.educationFund ?? 0), 0);
-  }
-  return 0;
-}
-
 function processPartnerCareer(
   connection: RelationshipConnection,
   gw: number,
@@ -1823,7 +1808,6 @@ export interface RelationshipWeekResult {
   headline: string | null;
   eventTitle: string | null;
   childBornName: string | null;
-  relationshipGoalCompleted: string | null;
   partnerCareerEvent: string | null;
   partnerDiedName: string | null;
   partnerInheritance: number;
@@ -1843,7 +1827,6 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
       headline: null,
       eventTitle: null,
       childBornName: null,
-      relationshipGoalCompleted: null,
       partnerCareerEvent: null,
       partnerDiedName: null,
       partnerInheritance: 0,
@@ -1863,7 +1846,6 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
       headline: null,
       eventTitle: null,
       childBornName: null,
-      relationshipGoalCompleted: null,
       partnerCareerEvent: null,
       partnerDiedName: null,
       partnerInheritance: 0,
@@ -2018,7 +2000,7 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
       familySpendingWeeksRemaining: partnerDiedName ? 0 : familySpendingWeeksRemaining,
       coupleTripWeeksRemaining: partnerDiedName ? 0 : coupleTripWeeksRemaining,
       pendingEvent: partnerDiedName ? null : current.pendingEvent,
-      sharedGoal: partnerDiedName ? null : current.sharedGoal,
+      sharedGoal: null,
     },
   };
 
@@ -2061,42 +2043,6 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
   if (currentPartner && currentPartner.relationship < 35 && gw - lastStabilityWarningWeek >= 8 && !current.pendingEvent) {
     headline = `${currentPartner.name} says the relationship is in serious trouble.`;
     lastStabilityWarningWeek = gw;
-  }
-
-  let relationshipGoalCompleted: string | null = null;
-  let relationshipMemories = current.memories ?? [];
-  let sharedGoal = current.sharedGoal ?? null;
-  if (sharedGoal && !sharedGoal.completed) {
-    const goalState: GameState = {
-      ...workingState,
-      relationshipState: { ...workingState.relationshipState, activeConnections: adjustedConnections, sharedGoal },
-    };
-    const progress = sharedGoalProgress(goalState);
-    if (progress >= sharedGoal.target) {
-      const label = sharedGoal.type === 'cash_buffer' ? 'cash buffer'
-        : sharedGoal.type === 'net_worth' ? 'net-worth goal'
-          : sharedGoal.type === 'better_home' ? 'housing goal'
-            : 'family education fund';
-      relationshipGoalCompleted = `You completed your shared ${label}.`;
-      sharedGoal = { ...sharedGoal, completed: true };
-      if (partner) {
-        adjustedConnections = adjustedConnections.map((item) =>
-          item.id === partner.id ? { ...item, relationship: Math.min(100, (item.relationship ?? 70) + 5) } : item
-        );
-        relationshipChange += 5;
-        relationshipMemories = [...relationshipMemories, {
-          id: `shared_goal_${sharedGoal.type}_${gw}_${partner.id}`,
-          tag: 'shared_goal' as const,
-          label: `Reached a shared ${label} together`,
-          sentiment: 'positive' as const,
-          globalWeek: gw,
-          partnerId: partner.id,
-          sourceEventId: `shared_goal_${sharedGoal.type}`,
-        }];
-      }
-      timeline.push({ week: state.week, year: state.year, title: relationshipGoalCompleted });
-      if (!headline) headline = relationshipGoalCompleted;
-    }
   }
 
   const currentSnapshot = financialSnapshot({ ...workingState, relationshipState: { ...workingState.relationshipState, activeConnections: adjustedConnections } });
@@ -2198,9 +2144,9 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
       relationshipEventWeeks,
       lastWorkFamilyConflictWeek,
       recentRelationshipEventIds,
-      memories: relationshipMemories,
+      memories: current.memories ?? [],
       financialSnapshot: currentSnapshot,
-      sharedGoal: partnerDiedName ? null : sharedGoal,
+      sharedGoal: null,
       lastStabilityWarningWeek,
       partnerId: activePartnerId,
       formerPartners,
@@ -2220,7 +2166,6 @@ export function processRelationships(state: GameState): RelationshipWeekResult {
     headline,
     eventTitle,
     childBornName,
-    relationshipGoalCompleted,
     partnerCareerEvent,
     partnerDiedName,
     partnerInheritance,

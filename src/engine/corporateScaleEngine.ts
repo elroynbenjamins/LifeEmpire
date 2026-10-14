@@ -4,7 +4,7 @@ import {
   CorporateScaleTier,
   OwnedBusiness,
 } from '../types/game';
-import { getBusinessInsuranceTier } from './businessInsuranceEngine';
+
 
 export const CORPORATE_SCALE_MIN_VALUATION = 25_000_000;
 
@@ -235,57 +235,14 @@ export function makeCorporateScaleCrisis(
   business: OwnedBusiness,
   globalWeek: number,
 ): BusinessPendingDecision {
-  const cyberRapid = corporateCashCost(business, 0.006, 250_000, 4_000_000);
-  const cyberRebuild = corporateCashCost(business, 0.012, 500_000, 8_000_000);
-  const complianceFull = corporateCashCost(business, 0.010, 300_000, 8_000_000);
-  const complianceLegal = corporateCashCost(business, 0.004, 200_000, 3_500_000);
   const leadershipInternal = corporateCashCost(business, 0.003, 150_000, 2_500_000);
   const leadershipSearch = corporateCashCost(business, 0.007, 300_000, 5_000_000);
   const supplyReroute = corporateCashCost(business, 0.008, 300_000, 6_000_000);
   const supplyDual = corporateCashCost(business, 0.012, 500_000, 9_000_000);
   const salesPush = corporateCashCost(business, 0.006, 250_000, 5_000_000);
   const diversify = corporateCashCost(business, 0.009, 400_000, 7_000_000);
-  const recallFull = corporateCashCost(business, 0.010, 350_000, 8_000_000);
-  const recallLimited = corporateCashCost(business, 0.005, 200_000, 4_000_000);
-
-  const cyberTier = getBusinessInsuranceTier(business, 'cyber');
-  const liabilityTier = getBusinessInsuranceTier(business, 'liability');
 
   const candidates: BusinessPendingDecision[] = [
-    {
-      id: `corporate_cyber_${business.id}_${globalWeek}`,
-      kind: 'crisis',
-      title: 'Cybersecurity Incident',
-      description: `${business.name} has suffered a serious systems and data-security incident. At this scale, the response affects customers, operations and regulators.`,
-      icon: '🛡️',
-      insuranceArea: 'cyber',
-      insuranceTierAtCreation: cyberTier,
-      createdGlobalWeek: globalWeek,
-      deadlineGlobalWeek: globalWeek + 3,
-      defaultChoiceId: 'accept_outage',
-      choices: [
-        { id: 'rapid_response', text: 'Emergency Containment', description: 'Bring in specialist response teams and contain the incident quickly.', businessCashCost: cyberRapid, cashCostScale: 'absolute', revenueMultiplier: 0.99, expenseMultiplier: 1.02, reputationDelta: 1, durationWeeks: 4 },
-        { id: 'rebuild_systems', text: 'Rebuild Critical Systems', description: 'Spend more now to harden the platform and restore confidence.', businessCashCost: cyberRebuild, cashCostScale: 'absolute', revenueMultiplier: 0.99, expenseMultiplier: 0.98, reputationDelta: 2, durationWeeks: 8 },
-        { id: 'accept_outage', text: 'Contain Internally', description: 'Preserve cash but accept a longer outage and reputational damage.', revenueMultiplier: 0.85, expenseMultiplier: 1.03, reputationDelta: -3, durationWeeks: 6 },
-      ],
-    },
-    {
-      id: `corporate_regulatory_${business.id}_${globalWeek}`,
-      kind: 'crisis',
-      title: 'Regulatory Investigation',
-      description: `Regulators have opened a formal review into part of ${business.name}'s operations.`,
-      icon: '⚖️',
-      insuranceArea: 'liability',
-      insuranceTierAtCreation: liabilityTier,
-      createdGlobalWeek: globalWeek,
-      deadlineGlobalWeek: globalWeek + 3,
-      defaultChoiceId: 'minimal_response',
-      choices: [
-        { id: 'full_remediation', text: 'Launch Full Remediation', description: 'Fund a comprehensive compliance program and cooperate fully.', businessCashCost: complianceFull, cashCostScale: 'absolute', revenueMultiplier: 0.98, expenseMultiplier: 1.01, reputationDelta: 2, durationWeeks: 5 },
-        { id: 'legal_defense', text: 'Mount Legal Defense', description: 'Contest the broadest findings while maintaining operations.', businessCashCost: complianceLegal, cashCostScale: 'absolute', revenueMultiplier: 0.96, expenseMultiplier: 1.02, reputationDelta: -1, durationWeeks: 6 },
-        { id: 'minimal_response', text: 'Minimum Required Response', description: 'Spend little now, but accept deeper operating and brand disruption.', revenueMultiplier: 0.90, expenseMultiplier: 1.08, reputationDelta: -4, durationWeeks: 8 },
-      ],
-    },
     {
       id: `corporate_executive_${business.id}_${globalWeek}`,
       kind: 'crisis',
@@ -329,23 +286,6 @@ export function makeCorporateScaleCrisis(
         { id: 'replacement_campaign', text: 'Launch Replacement Campaign', description: 'Fund a major commercial push to replace the lost volume.', businessCashCost: salesPush, cashCostScale: 'absolute', revenueMultiplier: 0.98, expenseMultiplier: 1.04, marketShareDelta: 2, durationWeeks: 8 },
         { id: 'diversify_channels', text: 'Diversify Channels', description: 'Rebuild the sales mix more broadly, accepting a slower recovery.', businessCashCost: diversify, cashCostScale: 'absolute', revenueMultiplier: 0.96, expenseMultiplier: 1.02, reputationDelta: 2, durationWeeks: 10 },
         { id: 'absorb_loss', text: 'Absorb the Loss', description: 'Protect liquidity and accept the missing revenue temporarily.', revenueMultiplier: 0.82, marketShareDelta: -3, durationWeeks: 7 },
-      ],
-    },
-    {
-      id: `corporate_recall_${business.id}_${globalWeek}`,
-      kind: 'crisis',
-      title: 'Product / Service Recall',
-      description: `A quality failure at ${business.name} has become large enough to require a coordinated corporate response.`,
-      icon: '📣',
-      insuranceArea: 'liability',
-      insuranceTierAtCreation: liabilityTier,
-      createdGlobalWeek: globalWeek,
-      deadlineGlobalWeek: globalWeek + 3,
-      defaultChoiceId: 'deny_scope',
-      choices: [
-        { id: 'full_recall', text: 'Voluntary Full Recall', description: 'Take the financial hit, fix the problem and protect long-term trust.', businessCashCost: recallFull, cashCostScale: 'absolute', revenueMultiplier: 0.94, reputationDelta: 1, durationWeeks: 5 },
-        { id: 'limited_recall', text: 'Targeted Recall', description: 'Limit the scope and accept some continuing brand pressure.', businessCashCost: recallLimited, cashCostScale: 'absolute', revenueMultiplier: 0.90, reputationDelta: -2, durationWeeks: 6 },
-        { id: 'deny_scope', text: 'Contest the Scope', description: 'Avoid a major immediate cost but risk a severe customer backlash.', revenueMultiplier: 0.80, expenseMultiplier: 1.06, reputationDelta: -6, durationWeeks: 8 },
       ],
     },
   ];

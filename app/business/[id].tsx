@@ -8,6 +8,8 @@ import { Colors, resolveThemeColor } from '../../src/theme/colors';
 import GameCard from '../../src/components/GameCard';
 import StatusPill from '../../src/components/StatusPill';
 import FeatureTourModal, { FeatureTourStep } from '../../src/components/FeatureTourModal';
+import { getBusinessLoanOffers } from '../../src/engine/businessLoanOffers';
+import { getRecruitmentCooldown, getRecruitmentWaitWeeks, getSmallBusinessPayrollDiscount } from '../../src/engine/businessStaffingEngine';
 import TutorialScrollView from '../../src/components/TutorialScrollView';
 import TutorialChapterLauncher, { useTutorialChapterScreen, useTutorialScreenBlocker, cancelTutorialReveal } from '../../src/components/TutorialChapterLauncher';
 import useGameStore from '../../src/store/gameStore';
@@ -29,7 +31,7 @@ import { getEconomicCycleEffects, inflated } from '../../src/engine/economyEngin
 import employeeRolesData from '../../src/data/employee_roles.json';
 import { businessTypeImages, employeeRoleImages } from '../../src/assets/progressionImages';
 import { getPrestigeEffects } from '../../src/engine/prestigeEngine';
-import { AcquisitionIntegrationStrategy, BusinessBoardMandate, BusinessExecutiveRole, BusinessGovernanceRole, BusinessInsuranceArea, BusinessInsuranceTier, BusinessReinvestmentArea, BusinessStrategicFocus, CorporateCompensationPolicy, CorporateDepartmentId, CorporateTrainingPolicy } from '../../src/types/game';
+import { AcquisitionIntegrationStrategy, BusinessBoardMandate, BusinessExecutiveRole, BusinessGovernanceRole, BusinessReinvestmentArea, BusinessStrategicFocus, CorporateCompensationPolicy, CorporateDepartmentId, CorporateTrainingPolicy } from '../../src/types/game';
 import { calculateChildInheritanceTax } from '../../src/engine/lifecycleEngine';
 import { getAcquisitionIntegrationDecisionPreview } from '../../src/engine/acquisitionEngine';
 import {
@@ -66,12 +68,7 @@ import {
 } from '../../src/engine/businessReinvestmentEngine';
 import {
   BUSINESS_INSURANCE_AREAS,
-  BUSINESS_INSURANCE_TIERS,
   getBusinessInsuranceLossQuote,
-  getBusinessInsuranceQuote,
-  getBusinessInsuranceRiskSummary,
-  getBusinessInsuranceTotalWeeklyPremium,
-  normalizeBusinessInsurancePolicies,
 } from '../../src/engine/businessInsuranceEngine';
 import {
   BUSINESS_BUDGET_PRESETS,
@@ -94,6 +91,7 @@ import {
   CORPORATE_DEPARTMENT_DEFINITIONS,
   CORPORATE_TRAINING_POLICIES,
   CORPORATE_WORKFORCE_UNLOCK_VALUATION,
+  CORPORATE_WORKFORCE_UNLOCK_LEVEL,
   getCorporateHrPolicyCooldownWeeks,
   getCorporateWorkforceEffects,
   getCorporateWorkforceWeeklyPayroll,
@@ -145,6 +143,24 @@ const BUSINESS_CASH_TOUR_STEPS: FeatureTourStep[] = [
   },
 ];
 
+const CORPORATE_WORKFORCE_TOUR_STEPS: FeatureTourStep[] = [
+  {
+    title: 'Two kinds of employees',
+    body: 'Named employees are the people you hire and train individually. Corporate departments represent the wider workforce. Their pay comes from company cash each week.',
+    icon: 'people-outline',
+  },
+  {
+    title: 'Set department targets',
+    body: 'Recommended headcount is a guide for the current company size. Changes to a target hire or release staff over time. Compare weekly payroll with revenue before growing every department.',
+    icon: 'options-outline',
+  },
+  {
+    title: 'Watch capacity and costs',
+    body: 'Staffing affects revenue, overhead and crisis risk. Compensation and training policies change wages, hiring and retention. Review the Management Report after a few weeks to see the result.',
+    icon: 'stats-chart-outline',
+  },
+];
+
 const AD_OPTIONS: { key: 'none' | 'basic' | 'moderate' | 'aggressive'; label: string; cost: string }[] = [
   { key: 'none', label: 'None', cost: '€0/wk' },
   { key: 'basic', label: 'Basic', cost: '€200/wk' },
@@ -152,11 +168,7 @@ const AD_OPTIONS: { key: 'none' | 'basic' | 'moderate' | 'aggressive'; label: st
   { key: 'aggressive', label: 'Aggressive', cost: '€1,200/wk' },
 ];
 
-const LOAN_OPTIONS = [
-  { amount: 10000, rate: 0.14, weeks: 26, label: '€10K • 14% • 26wk' },
-  { amount: 25000, rate: 0.12, weeks: 40, label: '€25K • 12% • 40wk' },
-  { amount: 50000, rate: 0.10, weeks: 52, label: '€50K • 10% • 52wk' },
-];
+
 
 const REVOLVER_DRAWS = [2_500_000, 5_000_000, 10_000_000];
 const BOND_ISSUES = [10_000_000, 25_000_000, 50_000_000];
@@ -202,24 +214,21 @@ function businessIdentityColor(color: string): string {
   if (color === 'family') return Colors.family;
   return Colors.primary;
 }
-type BusinessDetailSection = 'overview' | 'ownership' | 'leadership' | 'finance' | 'people' | 'risk' | 'growth' | 'capital';
+type BusinessDetailSection = 'overview' | 'ownership' | 'finance' | 'people' | 'risk' | 'growth';
 type BusinessDetailFocus = 'integration' | 'decision' | 'cash-management' | 'budget';
 
 const BUSINESS_SECTION_CHIPS: Array<{ key: BusinessDetailSection; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { key: 'overview', label: 'Overview', icon: 'speedometer-outline' },
   { key: 'ownership', label: 'Ownership', icon: 'people-outline' },
-  { key: 'leadership', label: 'Corporate', icon: 'briefcase-outline' },
-  { key: 'finance', label: 'Finance', icon: 'cash-outline' },
+  { key: 'finance', label: 'Cash Flow', icon: 'cash-outline' },
   { key: 'people', label: 'Team', icon: 'person-add-outline' },
-  { key: 'risk', label: 'Risk', icon: 'shield-checkmark-outline' },
   { key: 'growth', label: 'Growth', icon: 'trending-up-outline' },
-  { key: 'capital', label: 'Capital', icon: 'card-outline' },
 ];
 
 const MANAGEMENT_TARGET_SECTION: Record<CorporateManagementActionTarget, BusinessDetailSection> = {
-  workforce: 'leadership',
+  workforce: 'people',
   budget: 'finance',
-  finance: 'capital',
+  finance: 'ownership',
   maintenance: 'risk',
   investments: 'growth',
 };
@@ -233,6 +242,9 @@ const BUSINESS_FOCUS_SECTION: Record<BusinessDetailFocus, BusinessDetailSection>
 
 function normalizeBusinessDetailSection(value: string | string[] | undefined): BusinessDetailSection | null {
   const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === 'risk') return 'overview';
+  if (raw === 'capital') return 'ownership';
+  if (raw === 'leadership') return 'people';
   return BUSINESS_SECTION_CHIPS.some((section) => section.key === raw) ? raw as BusinessDetailSection : null;
 }
 
@@ -286,7 +298,7 @@ export default function BusinessDetailScreen() {
     applyMoraleActionToBusiness, startEmployeeTraining, startBusinessProject,
     unlockBusinessProjectSlot, grantTemporaryBusinessProjectSlot, unlockBusinessUpgradeSlot, grantTemporaryBusinessUpgradeSlot,
     getAdFreeSlotRewardUsage, claimAdFreeBusinessSlotReward,
-    startBusinessReinvestment, setBusinessInsurancePolicy, startCorporateCapex, resolveBusinessRetention,
+    startBusinessReinvestment, startCorporateCapex, markCorporateWorkforceGuideSeen,
   } = useGameStore(useShallow((s) => ({
     designateFamilyBusiness: s.designateFamilyBusiness,
     toggleLongTermFamilyAsset: s.toggleLongTermFamilyAsset,
@@ -331,14 +343,14 @@ export default function BusinessDetailScreen() {
     getAdFreeSlotRewardUsage: s.getAdFreeSlotRewardUsage,
     claimAdFreeBusinessSlotReward: s.claimAdFreeBusinessSlotReward,
     startBusinessReinvestment: s.startBusinessReinvestment,
-    setBusinessInsurancePolicy: s.setBusinessInsurancePolicy,
     startCorporateCapex: s.startCorporateCapex,
-    resolveBusinessRetention: s.resolveBusinessRetention,
+    markCorporateWorkforceGuideSeen: s.markCorporateWorkforceGuideSeen,
   })));
 
   const [showHireModal, setShowHireModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState<'inject' | 'withdraw' | null>(null);
   const [showBusinessTour, setShowBusinessTour] = useState(false);
+  const [showCorporateWorkforceTour, setShowCorporateWorkforceTour] = useState(false);
   const [transferAmount, setTransferAmount] = useState('');
   const [dialog, setDialog] = useState<{ title: string; message: string; action: () => void } | null>(null);
 
@@ -436,7 +448,7 @@ export default function BusinessDetailScreen() {
     sectionTabScrollRef.current?.scrollTo({ x: Math.max(0, tabIndex * 86 - 18), animated: false });
   });
   useTutorialScreenBlocker(Boolean(
-    showBusinessTour || showHireModal || showTransferModal || dialog || showTrainingModal || showProjectsModal || slotAdLoading
+    showBusinessTour || showCorporateWorkforceTour || showHireModal || showTransferModal || dialog || showTrainingModal || showProjectsModal || slotAdLoading
   ));
   useEffect(() => {
     // Low-balance warnings are handled globally, including away from this screen.
@@ -621,9 +633,7 @@ export default function BusinessDetailScreen() {
   const waitingStrategicDecision = pendingDecision?.kind === 'strategy';
   const reinvestmentState = normalizeBusinessReinvestmentState(biz.reinvestment, globalGameWeek);
   const reinvestmentEffects = getBusinessReinvestmentEffects(biz);
-  const insurancePolicies = normalizeBusinessInsurancePolicies(biz.insurancePolicies);
-  const insuranceRisk = getBusinessInsuranceRiskSummary(biz);
-  const insuranceWeeklyPremium = getBusinessInsuranceTotalWeeklyPremium(biz, globalGameWeek);
+
   const budgetPlan = normalizeBusinessBudgetPlan(biz.budgetPlan, gameYear);
   const budgetReserves = normalizeBusinessBudgetReserves(biz.budgetReserves);
   const budgetTargets = getBusinessBudgetReserveTargets(biz, biz.lastWeekExpenses ?? 0, inflationMultiplier);
@@ -768,6 +778,15 @@ export default function BusinessDetailScreen() {
         target: 'overview' as BusinessDetailSection,
       };
     }
+    if ((biz.balance ?? 0) < 0) {
+      return {
+        tone: Colors.negative,
+        icon: 'cash-outline',
+        title: 'Repair the business balance',
+        detail: 'Inject personal cash, take a business loan, or reduce spending before losses compound.',
+        target: 'finance' as BusinessDetailSection,
+      };
+    }
     if (isUnderStaffed) {
       return {
         tone: Colors.warning,
@@ -795,15 +814,6 @@ export default function BusinessDetailScreen() {
         target: 'finance' as BusinessDetailSection,
       };
     }
-    if (insuranceRisk.coverageGaps.length > 0) {
-      return {
-        tone: Colors.warning,
-        icon: 'shield-outline',
-        title: 'Close insurance coverage gaps',
-        detail: `${insuranceRisk.coverageGaps.length} risk area${insuranceRisk.coverageGaps.length === 1 ? '' : 's'} currently has no cover.`,
-        target: 'risk' as BusinessDetailSection,
-      };
-    }
     if (reinvestmentEffects.revenuePenalty > 0.04 || reinvestmentEffects.expenseIncrease > 0.04) {
       return {
         tone: Colors.warning,
@@ -813,36 +823,24 @@ export default function BusinessDetailScreen() {
         target: 'risk' as BusinessDetailSection,
       };
     }
-    if ((biz.balance ?? 0) < 0) {
-      return {
-        tone: Colors.negative,
-        icon: 'cash-outline',
-        title: 'Repair the business balance',
-        detail: 'Inject personal cash, take a business loan, or reduce spending before losses compound.',
-        target: 'finance' as BusinessDetailSection,
-      };
-    }
-    if ((biz.valuation ?? 0) >= 25_000_000 && !corporateWorkforce) {
+    if ((biz.level ?? 0) >= CORPORATE_WORKFORCE_UNLOCK_LEVEL
+      && (biz.valuation ?? 0) >= CORPORATE_WORKFORCE_UNLOCK_VALUATION && !corporateWorkforce) {
       return {
         tone: Colors.info,
         icon: 'business-outline',
         title: 'Set up corporate departments',
         detail: 'The company is large enough for corporate workforce planning and management reports.',
-        target: 'leadership' as BusinessDetailSection,
+        target: 'people' as BusinessDetailSection,
       };
     }
     return {
       tone: Colors.primary,
       icon: 'trending-up-outline',
       title: 'Grow reputation and cash flow',
-      detail: 'Use marketing, projects, upgrades and reinvestment to prepare for the next business level.',
+      detail: 'Use marketing, projects and upgrades to prepare for the next business level.',
       target: 'growth' as BusinessDetailSection,
     };
   })();
-
-  // Retention event
-  const retention = biz.pendingRetention;
-  const retentionEmployee = retention ? (biz.employees ?? []).find((e) => e.id === retention.employeeId) : null;
 
   const handleSell = () => {
     if (biz.portfolioIntent === 'long_term_family') {
@@ -899,7 +897,7 @@ export default function BusinessDetailScreen() {
       </View>
 
       <TutorialScrollView ref={detailScrollRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        <TutorialChapterLauncher chapter="business" subjectId={biz.id} />
+        <TutorialChapterLauncher chapter="business" subjectId={biz.id} autoStart />
         {/* Understaffed Warning */}
         {isUnderStaffed && (
           <View style={styles.warningBanner}>
@@ -909,6 +907,21 @@ export default function BusinessDetailScreen() {
             </Text>
           </View>
         )}
+
+        <Pressable
+          style={[styles.nextActionCard, { borderColor: `${nextAction.tone}55`, backgroundColor: `${nextAction.tone}12` }]}
+          onPress={() => activateSection(nextAction.target)}
+        >
+          <View style={[styles.nextActionIcon, { backgroundColor: `${nextAction.tone}22` }]}>
+            <Ionicons name={nextAction.icon as any} size={20} color={nextAction.tone} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.nextActionEyebrow, { color: nextAction.tone }]}>Recommended next action</Text>
+            <Text style={styles.nextActionTitle}>{nextAction.title}</Text>
+            <Text style={styles.nextActionDetail}>{nextAction.detail}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={nextAction.tone} />
+        </Pressable>
 
         <View style={styles.businessContextRow}>
           <View style={styles.businessContextItem}>
@@ -1022,21 +1035,6 @@ export default function BusinessDetailScreen() {
         </GameCard>
           </>
         )}
-
-        <Pressable
-          style={[styles.nextActionCard, { borderColor: `${nextAction.tone}55`, backgroundColor: `${nextAction.tone}12` }]}
-          onPress={() => activateSection(nextAction.target)}
-        >
-          <View style={[styles.nextActionIcon, { backgroundColor: `${nextAction.tone}22` }]}>
-            <Ionicons name={nextAction.icon as any} size={20} color={nextAction.tone} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.nextActionEyebrow, { color: nextAction.tone }]}>Recommended next action</Text>
-            <Text style={styles.nextActionTitle}>{nextAction.title}</Text>
-            <Text style={styles.nextActionDetail}>{nextAction.detail}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={nextAction.tone} />
-        </Pressable>
 
         {activeSection === 'overview' && (
           <>
@@ -1665,7 +1663,7 @@ export default function BusinessDetailScreen() {
           </>
         )}
 
-        {activeSection === 'leadership' && (
+        {activeSection === 'people' && (
           <>
         <View collapsable={false} />
         {((biz.valuation ?? 0) >= 10_000_000 || (biz.executives?.length ?? 0) > 0 || !!biz.pendingExecutiveSearch || !!biz.boardGovernance) && (
@@ -1857,13 +1855,20 @@ export default function BusinessDetailScreen() {
         )}
 
         <View collapsable={false} onLayout={(event) => recordManagementSection('workforce', event)} />
-        {((biz.valuation ?? 0) >= 20_000_000 || !!corporateWorkforce) && (
+        {((biz.valuation ?? 0) >= 20_000_000 || (biz.level ?? 0) >= CORPORATE_WORKFORCE_UNLOCK_LEVEL || !!corporateWorkforce) && (
           <GameCard title="Corporate Workforce">
+            {corporateWorkforce && (
+              <Pressable accessibilityRole="button" onPress={() => setShowCorporateWorkforceTour(true)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-end', paddingVertical: 8 }}>
+                <Ionicons name="help-circle-outline" size={17} color={Colors.info} />
+                <Text style={{ color: Colors.info, fontSize: 12, fontWeight: '700' }}>Workforce guide</Text>
+              </Pressable>
+            )}
             {!corporateWorkforce ? (
               <View style={styles.workforceLocked}>
                 <Ionicons name="people-outline" size={21} color={Colors.warning} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.workforceLockedTitle}>Department workforce unlocks at €25M valuation</Text>
+                  <Text style={styles.workforceLockedTitle}>Unlocks at level {CORPORATE_WORKFORCE_UNLOCK_LEVEL} and €25M value</Text>
                   <Text style={styles.workforceLockedText}>
                     Named employees remain key people. At corporate scale, broader Operations, Sales, Finance, Technology and Support headcount becomes a separate management layer.
                   </Text>
@@ -2133,10 +2138,6 @@ export default function BusinessDetailScreen() {
               <Text style={styles.budgetAllocationLabel}>Debt</Text>
             </View>
             <View style={styles.budgetAllocationItem}>
-              <Text style={styles.budgetAllocationPct}>{Math.round(budgetPlan.reinvestmentPct * 100)}%</Text>
-              <Text style={styles.budgetAllocationLabel}>Upkeep</Text>
-            </View>
-            <View style={styles.budgetAllocationItem}>
               <Text style={styles.budgetAllocationPct}>{Math.round(budgetPlan.growthPct * 100)}%</Text>
               <Text style={styles.budgetAllocationLabel}>Growth</Text>
             </View>
@@ -2354,6 +2355,7 @@ export default function BusinessDetailScreen() {
         <View collapsable={false} />
         {/* Employees */}
         <GameCard title={`Employees (${biz.employees?.length ?? 0}/${maxEmployees})`} tutorialId={chapterAnchor('business.team')}>
+          {getSmallBusinessPayrollDiscount(biz) > 0 && <Text style={styles.sectionHint}>Small-company payroll discount: {Math.round(getSmallBusinessPayrollDiscount(biz) * 1000) / 10}%</Text>}
           <Text style={{ color: Colors.textMuted, fontSize: 12, marginBottom: 8 }}>
             Skill boosts productivity (0.4x-1.2x). Potential caps how high skill can grow. Morale multiplies output (0.5x-1.2x).
           </Text>
@@ -2387,7 +2389,7 @@ export default function BusinessDetailScreen() {
                   )}
                 </View>
                 <View style={styles.empActions}>
-                  <Text style={styles.empSalary}>{formatCurrency(emp.weeklySalary)}/wk</Text>
+                  <Text style={styles.empSalary}>{formatCurrency(emp.weeklySalary * (1 - getSmallBusinessPayrollDiscount(biz)))}/wk</Text>
                   <View style={styles.empBtnRow}>
                     {!inTraining && (
                       <Pressable onPress={() => setShowTrainingModal(emp.id)} hitSlop={6} style={styles.smallBtn}>
@@ -2407,9 +2409,10 @@ export default function BusinessDetailScreen() {
             const charges = biz.recruitCharges ?? 0;
             const progress = biz.recruitProgress ?? 0;
             const totalAvail = free + charges;
-            const nextChargeIn = charges < 5 ? Math.max(1, 5 - progress) : 0;
-            const canRecruit = totalAvail > 0;
-            const label = free > 0
+            const cooldown = getRecruitmentCooldown(biz, globalGameWeek);
+            const nextChargeIn = Math.max(cooldown, charges < 5 ? Math.max(1, getRecruitmentWaitWeeks(biz) - progress) : 0);
+            const canRecruit = totalAvail > 0 && cooldown === 0;
+            const label = cooldown > 0 ? `Recruitment available in ${cooldown}wk` : free > 0
               ? `Recruit (Free ${free} left)`
               : charges > 0
                 ? `Recruit (€10,000 • ${charges} charge${charges !== 1 ? 's' : ''} left)`
@@ -2454,180 +2457,6 @@ export default function BusinessDetailScreen() {
           })}
         </GameCard>
 
-          </>
-        )}
-
-        {activeSection === 'risk' && (
-          <>
-        <View collapsable={false} />
-        <GameCard title="Insurance & Risk">
-          <View style={styles.insuranceSummary}>
-            <View style={styles.insuranceScoreBox}>
-              <Text style={styles.insuranceScore}>{insuranceRisk.score}</Text>
-              <Text style={styles.insuranceScoreLabel}>Risk cover</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.insuranceSummaryTitle}>
-                {insuranceRisk.coveredAreas}/4 areas insured • {formatCurrency(insuranceWeeklyPremium)}/wk
-              </Text>
-              <Text style={styles.insuranceSummaryText}>
-                Insurance reduces eligible incident costs after the deductible. It does not prevent the incident or remove operational disruption.
-              </Text>
-              {insuranceRisk.coverageGaps.length > 0 && (
-                <Text style={styles.insuranceGapText}>
-                  Coverage gap: {insuranceRisk.coverageGaps.map((area) => BUSINESS_INSURANCE_AREAS[area].name).join(', ')}
-                </Text>
-              )}
-            </View>
-          </View>
-
-          {(Object.keys(BUSINESS_INSURANCE_AREAS) as BusinessInsuranceArea[]).map((area) => {
-            const definition = BUSINESS_INSURANCE_AREAS[area];
-            const currentTier = insurancePolicies[area];
-            const currentQuote = getBusinessInsuranceQuote(biz, area, currentTier, globalGameWeek);
-            return (
-              <View key={area} style={styles.insuranceAreaRow}>
-                <View style={styles.insuranceAreaHeader}>
-                  <Text style={styles.insuranceIcon}>{definition.icon}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.insuranceAreaName}>{definition.name}</Text>
-                    <Text style={styles.insuranceAreaDesc}>{definition.description}</Text>
-                    <Text style={styles.insuranceAreaMeta}>
-                      Current: {currentTier.toUpperCase()} • {formatCurrency(currentQuote.weeklyPremium)}/wk • {Math.round(currentQuote.coveragePct * 100)}% of covered loss after {Math.round(currentQuote.deductiblePct * 100)}% deductible
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.insuranceTierRow}>
-                  {BUSINESS_INSURANCE_TIERS.map((tier) => {
-                    const quote = getBusinessInsuranceQuote(biz, area, tier, globalGameWeek);
-                    const active = currentTier === tier;
-                    return (
-                      <Pressable
-                        key={tier}
-                        style={[styles.insuranceTierChip, active && styles.insuranceTierChipActive]}
-                        onPress={() => setBusinessInsurancePolicy(biz.id, area, tier)}
-                      >
-                        <Text style={[styles.insuranceTierLabel, active && styles.insuranceTierLabelActive]}>
-                          {tier === 'none' ? 'None' : tier[0].toUpperCase() + tier.slice(1)}
-                        </Text>
-                        <Text style={styles.insuranceTierMeta}>
-                          {tier === 'none' ? '€0' : `${formatCurrency(quote.weeklyPremium)}/wk`}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-          })}
-
-          {(biz.insuranceClaims?.length ?? 0) > 0 && (
-            <View style={styles.claimHistory}>
-              <Text style={styles.subHeading}>Recent Claims</Text>
-              {(biz.insuranceClaims ?? []).slice(0, 5).map((claim) => (
-                <View key={claim.id} style={styles.claimRow}>
-                  <Text style={styles.claimIcon}>{BUSINESS_INSURANCE_AREAS[claim.area].icon}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.claimTitle}>{claim.incidentTitle}</Text>
-                    <Text style={styles.claimMeta}>
-                      {claim.policyTier.toUpperCase()} • Gross {formatCurrency(claim.grossLoss)} • Payout {formatCurrency(claim.payout)}
-                    </Text>
-                  </View>
-                  <Text style={styles.claimNet}>-{formatCurrency(claim.netLoss)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </GameCard>
-
-        <View collapsable={false} onLayout={(event) => recordManagementSection('maintenance', event)} />
-        <GameCard title="Business Reinvestment">
-          <Text style={styles.sectionHint}>
-            Technology, premises and equipment wear down over time. Reinvest before they become outdated; neglected infrastructure gradually lowers revenue, raises costs and increases business risk.
-          </Text>
-
-          {(reinvestmentEffects.revenuePenalty > 0 || reinvestmentEffects.expenseIncrease > 0) && (
-            <View style={styles.reinvestmentWarning}>
-              <Ionicons name="warning-outline" size={15} color={Colors.warning} />
-              <Text style={styles.reinvestmentWarningText}>
-                Current drag: -{(reinvestmentEffects.revenuePenalty * 100).toFixed(1)}% revenue • +{(reinvestmentEffects.expenseIncrease * 100).toFixed(1)}% expenses • +{(reinvestmentEffects.crisisIncrease * 100).toFixed(1)}% crisis pressure
-              </Text>
-            </View>
-          )}
-
-          {biz.activeReinvestment && (
-            <View style={styles.reinvestmentActive}>
-              <Text style={styles.reinvestmentActiveTitle}>
-                {BUSINESS_REINVESTMENT_AREAS[biz.activeReinvestment.area].icon} {biz.activeReinvestment.projectName}
-              </Text>
-              <Text style={styles.reinvestmentActiveMeta}>
-                {biz.activeReinvestment.weeksRemaining} weeks remaining • {formatCurrency(biz.activeReinvestment.costPaid)} invested
-              </Text>
-            </View>
-          )}
-
-          {(Object.keys(BUSINESS_REINVESTMENT_AREAS) as BusinessReinvestmentArea[]).map((area) => {
-            const definition = BUSINESS_REINVESTMENT_AREAS[area];
-            const track = reinvestmentState[area];
-            const condition = Math.round(track.condition);
-            const label = getBusinessConditionLabel(condition);
-            const cost = getBusinessReinvestmentCost(biz, area, inflationMultiplier);
-            const eligibility = canStartBusinessReinvestment(biz, area);
-            const affordable = (biz.balance ?? 0) >= cost;
-            const disabled = !eligibility.allowed || !affordable || !!biz.activeReinvestment;
-            const statusColor = label.severity === 'good'
-              ? Colors.primary
-              : label.severity === 'bad'
-                ? Colors.negative
-                : Colors.warning;
-
-            return (
-              <View key={area} style={styles.reinvestmentRow}>
-                <View style={styles.reinvestmentIcon}>
-                  <Text style={styles.reinvestmentIconText}>{definition.icon}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.reinvestmentTitleRow}>
-                    <Text style={styles.reinvestmentName}>{definition.name}</Text>
-                    <Text style={[styles.reinvestmentCondition, { color: statusColor }]}>
-                      {condition}% • {label.label}
-                    </Text>
-                  </View>
-                  <Text style={styles.reinvestmentDesc}>{definition.description}</Text>
-                  <View style={styles.reinvestmentTrack}>
-                    <View style={[styles.reinvestmentFill, { width: `${Math.max(0, Math.min(100, condition))}%`, backgroundColor: statusColor }]} />
-                  </View>
-                  <Text style={styles.reinvestmentMeta}>
-                    {definition.weeks} weeks • Current renewal cost {formatCurrency(cost)}
-                  </Text>
-                  {!eligibility.allowed && !biz.activeReinvestment && (
-                    <Text style={styles.reinvestmentLocked}>{eligibility.reason}</Text>
-                  )}
-                  {eligibility.allowed && !affordable && (
-                    <Text style={styles.reinvestmentLocked}>
-                      Need {formatCurrency(cost - (biz.balance ?? 0))} more business cash
-                    </Text>
-                  )}
-                </View>
-                <Pressable
-                  disabled={disabled}
-                  onPress={() => confirmAction(
-                    definition.name,
-                    `Invest ${formatCurrency(cost)} from the business account? Work takes ${definition.weeks} weeks and restores ${definition.name.toLowerCase()} condition to 100% when complete.`,
-                    () => startBusinessReinvestment(biz.id, area),
-                  )}
-                  style={[styles.reinvestmentButton, !disabled && styles.reinvestmentButtonActive, disabled && styles.disabledAction]}
-                >
-                  <Text style={[styles.reinvestmentButtonText, !disabled && { color: Colors.primary }]}>
-                    {biz.activeReinvestment?.area === area ? 'WORKING' : 'RENEW'}
-                  </Text>
-                </Pressable>
-              </View>
-            );
-          })}
-        </GameCard>
-
-        {/* Active Business Projects */}
           </>
         )}
 
@@ -3029,7 +2858,7 @@ export default function BusinessDetailScreen() {
           </>
         )}
 
-        {activeSection === 'capital' && (
+        {activeSection === 'ownership' && (
           <>
         <View collapsable={false} onLayout={(event) => recordManagementSection('finance', event)} />
         {corporateScaleTier !== 'local' && (
@@ -3190,15 +3019,24 @@ export default function BusinessDetailScreen() {
               </View>
             );
           })}
-          {corporateScaleTier === 'local' && (biz.businessLoans?.length ?? 0) < 3 && (
+          {corporateScaleTier === 'local' && (
             <View style={styles.loanOptions}>
-              {LOAN_OPTIONS.map((opt) => (
+              {getBusinessLoanOffers(biz, loanRateReduction, businessMacroRateModifier).map((opt) => (
                 <Pressable
                   key={opt.amount}
-                  style={styles.loanBtn}
-                  onPress={() => takeBusinessLoan(biz.id, opt.amount, opt.rate, opt.weeks)}
+                  accessibilityRole="button"
+                  disabled={!opt.available}
+                  style={[styles.loanBtn, !opt.available && styles.disabledAction]}
+                  onPress={() => confirmAction(
+                    'Take Business Loan',
+                    `${formatCurrency(opt.amount)} goes into company cash. Repay ${formatCurrency(opt.weeklyPayment)}/week for up to ${opt.weeks} weeks. Total repayment: ${formatCurrency(opt.totalRepayment)} including ${(opt.interestRate * 100).toFixed(1)}% flat interest over the full term (not an annual rate).`,
+                    () => takeBusinessLoan(biz.id, opt.amount, opt.rate, opt.weeks),
+                  )}
                 >
-                  <Text style={styles.loanBtnText}>{formatCurrency(opt.amount)} · {(Math.max(0, opt.rate + businessMacroRateModifier - loanRateReduction) * 100).toFixed(1)}% · {opt.weeks}wk</Text>
+                  <Text style={styles.loanBtnText}>{formatCurrency(opt.amount)} · {(opt.interestRate * 100).toFixed(1)}% term interest · {opt.weeks}wk</Text>
+                  <Text style={styles.loanPayment}>{formatCurrency(opt.weeklyPayment)}/wk · Total {formatCurrency(opt.totalRepayment)}</Text>
+                  {!opt.unlocked && <Text style={styles.loanPayment}>Unlock: level {opt.level} or {formatCurrency(opt.value)} operating value</Text>}
+                  {opt.unlocked && !opt.available && <Text style={styles.loanPayment}>{opt.reason}</Text>}
                 </Pressable>
               ))}
             </View>
@@ -3328,59 +3166,21 @@ export default function BusinessDetailScreen() {
         </Pressable>
       </Modal>
 
-      {/* Retention Event Modal */}
-      <Modal visible={!!retention && !!retentionEmployee} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Employee Request</Text>
-            {retention && retentionEmployee && (
-              <>
-                <Text style={styles.retentionDesc}>
-                  {retention.type === 'poach'
-                    ? `${retentionEmployee.name} has received a job offer from a competitor!`
-                    : retention.type === 'raise'
-                    ? `${retentionEmployee.name} is requesting a raise.`
-                    : retention.type === 'promotion'
-                    ? `${retentionEmployee.name} wants a promotion.`
-                    : `${retentionEmployee.name} is requesting training opportunities.`}
-                </Text>
-                {retention.type === 'poach' && (
-                  <View style={styles.retentionBtns}>
-                    <RetBtn label="Match Salary (+15%)" onPress={() => resolveBusinessRetention(biz.id, 'match_salary')} color={Colors.info} />
-                    <RetBtn label="Big Raise (+25%)" onPress={() => resolveBusinessRetention(biz.id, 'increase_salary')} color={Colors.primary} />
-                    <RetBtn label="Promote (+20%)" onPress={() => resolveBusinessRetention(biz.id, 'promote')} color={Colors.warning} />
-                    <RetBtn label="Let Them Go" onPress={() => resolveBusinessRetention(biz.id, 'let_go')} color={Colors.negative} />
-                  </View>
-                )}
-                {retention.type === 'raise' && (
-                  <View style={styles.retentionBtns}>
-                    <RetBtn label="Grant Raise (+15%)" onPress={() => resolveBusinessRetention(biz.id, 'accept')} color={Colors.primary} />
-                    <RetBtn label="Deny" onPress={() => resolveBusinessRetention(biz.id, 'deny')} color={Colors.negative} />
-                  </View>
-                )}
-                {retention.type === 'promotion' && (
-                  <View style={styles.retentionBtns}>
-                    <RetBtn label="Promote (+25%)" onPress={() => resolveBusinessRetention(biz.id, 'promote')} color={Colors.primary} />
-                    <RetBtn label="Deny" onPress={() => resolveBusinessRetention(biz.id, 'deny')} color={Colors.negative} />
-                  </View>
-                )}
-                {retention.type === 'training' && (
-                  <View style={styles.retentionBtns}>
-                    <RetBtn label="Fund Training (€2,000)" onPress={() => resolveBusinessRetention(biz.id, 'accept')} color={Colors.primary} />
-                    <RetBtn label="Deny" onPress={() => resolveBusinessRetention(biz.id, 'deny')} color={Colors.negative} />
-                  </View>
-                )}
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
-
       <FeatureTourModal
         visible={showBusinessTour}
         title="Business cash basics"
         steps={BUSINESS_CASH_TOUR_STEPS}
         onClose={() => setShowBusinessTour(false)}
+      />
+      <FeatureTourModal
+        visible={!!corporateWorkforce && activeSection === 'people' && !showBusinessTour && !showFundingNotice
+          && (showCorporateWorkforceTour || !biz.corporateWorkforceGuideSeen)}
+        title="Corporate workforce"
+        steps={CORPORATE_WORKFORCE_TOUR_STEPS}
+        onClose={() => {
+          setShowCorporateWorkforceTour(false);
+          if (!biz.corporateWorkforceGuideSeen) markCorporateWorkforceGuideSeen(biz.id);
+        }}
       />
 
       {/* Transfer Modal */}
@@ -4180,14 +3980,6 @@ function CorporateManagementReportPanel({
   );
 }
 
-function RetBtn({ label, onPress, color }: { label: string; onPress: () => void; color: string }) {
-  return (
-    <Pressable style={[styles.retBtn, { borderColor: color }]} onPress={onPress}>
-      <Text style={[styles.retBtnText, { color }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
@@ -4217,7 +4009,7 @@ const styles = StyleSheet.create({
   identityRow: { gap: 5, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
   identityDescription: { color: Colors.textSecondary, fontSize: 10, lineHeight: 15 },
   identityEmpty: { color: Colors.textMuted, fontSize: 11, lineHeight: 16 },
-  nextActionCard: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 14, padding: 12 },
+  nextActionCard: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 12 },
   nextActionIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   nextActionEyebrow: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.7 },
   nextActionTitle: { color: Colors.textPrimary, fontSize: 13, fontWeight: '900', marginTop: 2 },
@@ -4744,7 +4536,7 @@ const styles = StyleSheet.create({
   loanAmount: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
   loanPayment: { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
   loanOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  loanBtn: { backgroundColor: Colors.elevated, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: Colors.cardBorder },
+  loanBtn: { width: '100%', backgroundColor: Colors.elevated, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: Colors.cardBorder },
   loanBtnText: { color: Colors.textPrimary, fontSize: 13, fontWeight: '500' },
   eventRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
   eventText: { color: Colors.textSecondary, fontSize: 13, flex: 1 },
@@ -4755,10 +4547,6 @@ const styles = StyleSheet.create({
   candidateStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6 },
   candidateStat: { color: Colors.textSecondary, fontSize: 12, backgroundColor: `${Colors.primary}15`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   candidateSalary: { color: Colors.warning, fontSize: 14, fontWeight: '700', marginTop: 8 },
-  retentionDesc: { color: Colors.textSecondary, fontSize: 14, lineHeight: 20, marginBottom: 16 },
-  retentionBtns: { gap: 8 },
-  retBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  retBtnText: { fontSize: 14, fontWeight: '600' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalContent: { backgroundColor: Colors.card, borderRadius: 16, padding: 20, width: '100%', maxWidth: 400, maxHeight: '85%' },
   modalTitle: { color: Colors.textPrimary, fontSize: 18, fontWeight: '700', marginBottom: 16 },

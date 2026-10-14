@@ -148,7 +148,7 @@ describe('corporate scale and capital expenditure', () => {
     const crisis = makeCorporateScaleCrisis(business, 160);
     const paidChoice = crisis.choices.find((choice) => (choice.businessCashCost ?? 0) > 0)!;
 
-    expect(crisis.title).toBe('Cybersecurity Incident');
+    expect(crisis.title).toBe('Executive Departure');
     expect(paidChoice.cashCostScale).toBe('absolute');
     expect(getBusinessDecisionChoiceCost(paidChoice, 3)).toBe(paidChoice.businessCashCost);
     expect(getBusinessDecisionChoiceCost({ businessCashCost: 10_000 }, 3)).toBe(30_000);

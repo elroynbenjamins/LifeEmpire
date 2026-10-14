@@ -69,7 +69,7 @@ export default function DashboardScreen() {
   const portfolioValue = getPortfolioValueTotal?.() ?? 0;
   const hasHoldings = (holdings?.length ?? 0) > 0;
   const totalLoanDebt = (loans ?? []).reduce((t, l) => t + (l?.remainingAmount ?? 0), 0);
-  const businessAttentionCount = businesses.filter((business) => !!business.pendingDecision).length;
+  const businessAttentionCount = businesses.filter((business) => !!business.pendingDecision || business.balance < 0).length;
   const businessCrisisCount = businesses.filter((business) => business.pendingDecision?.kind === 'crisis').length;
   const latestAnnualReport = annualReports[0] ?? null;
   const latestAnnualNetFlow = latestAnnualReport
@@ -377,7 +377,8 @@ export default function DashboardScreen() {
         {/* Utility Links */}
         <Text style={styles.sectionLabel}>More</Text>
         <View style={styles.linksRow}>
-          <QuickLink icon="briefcase" label="Career" onPress={() => router.push('/tabs/career')} />
+          <QuickLink icon="stats-chart" label="Statistics" onPress={() => router.push('/tabs/statistics')} />
+          <QuickLink icon="business" label="Real Estate" onPress={() => router.push('/properties')} />
           <QuickLink icon="home" label="Lifestyle" onPress={() => router.push('/housing')} />
           <QuickLink icon="trophy" label="Achievements" onPress={() => router.push('/achievements')} color={Colors.warning} />
           <QuickLink icon="card" label="Bank" onPress={() => router.push('/loans')} color={Colors.info} />

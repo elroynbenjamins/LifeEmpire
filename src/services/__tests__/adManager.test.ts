@@ -172,6 +172,53 @@ describe('rewarded ad responsiveness', () => {
     await expect(retry).resolves.toBe(true);
   });
 
+  test('shares concurrent interstitial loads and reuses the ready ad', async () => {
+    const { manager, ads } = getHarness();
+    const first = manager.loadInterstitialAd();
+    const second = manager.loadInterstitialAd();
+    await flushNativeModuleLoad();
+    expect(ads.__createdAds).toHaveLength(1);
+    ads.__createdAds[0].emit(ads.AdEventType.LOADED);
+    await expect(first).resolves.toBe(true);
+    await expect(second).resolves.toBe(true);
+    await expect(manager.loadInterstitialAd()).resolves.toBe(true);
+    expect(ads.__createdAds).toHaveLength(1);
+  });
+
+  test('native show errors release the interstitial without dismissing the queued ad', async () => {
+    const { manager, ads } = getHarness();
+    const load = manager.loadInterstitialAd();
+    await flushNativeModuleLoad();
+    ads.__createdAds[0].emit(ads.AdEventType.LOADED);
+    await load;
+    const closed = jest.fn();
+    const failed = jest.fn();
+    await manager.showInterstitialAd(closed, failed);
+    await expect(manager.showInterstitialAd(closed)).resolves.toBe(false);
+    ads.__createdAds[0].emit(ads.AdEventType.ERROR);
+    ads.__createdAds[0].emit(ads.AdEventType.CLOSED);
+    expect(closed).not.toHaveBeenCalled();
+    expect(failed).toHaveBeenCalledTimes(1);
+    const retry = manager.loadInterstitialAd();
+    await flushNativeModuleLoad();
+    ads.__createdAds[1].emit(ads.AdEventType.LOADED);
+    await expect(retry).resolves.toBe(true);
+  });
+
+  test('a rejected native show uses the failure callback, not the close callback', async () => {
+    const { manager, ads } = getHarness();
+    const load = manager.loadInterstitialAd();
+    await flushNativeModuleLoad();
+    ads.__createdAds[0].emit(ads.AdEventType.LOADED);
+    await load;
+    ads.__createdAds[0].show.mockRejectedValueOnce(new Error('show failed'));
+    const closed = jest.fn();
+    const failed = jest.fn();
+    await expect(manager.showInterstitialAd(closed, failed)).resolves.toBe(false);
+    expect(closed).not.toHaveBeenCalled();
+    expect(failed).toHaveBeenCalledTimes(1);
+  });
+
   test('dismisses an interstitial when the native close event fires', async () => {
     const { manager, ads } = getHarness();
 

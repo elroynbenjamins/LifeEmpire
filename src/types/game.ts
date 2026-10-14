@@ -946,7 +946,6 @@ export interface WeekSummary {
   relationshipObligationCost: number;
   relationshipEventTitle: string | null;
   childBornName: string | null;
-  relationshipGoalCompleted: string | null;
   partnerCareerEvent: string | null;
   partnerDiedName: string | null;
   partnerInheritance: number;
@@ -1711,10 +1710,12 @@ export interface OwnedBusiness {
   annualProfitYear?: number;
   // NEW: pending retention events for player choice
   pendingRetention?: { employeeId: string; type: 'poach' | 'raise' | 'promotion' | 'training' } | null;
+  corporateWorkforceGuideSeen?: boolean;
   // Recruit system (D&D style charges)
   freeRecruits?: number;        // remaining free recruit attempts (start=3)
   recruitCharges?: number;      // stored paid charges (max 5)
-  recruitProgress?: number;     // weeks accrued toward next paid charge (0-5)
+  recruitProgress?: number;     // weeks accrued toward next paid charge
+  nextRecruitmentWeek?: number; // paid recruitment cooldown; legacy saves default to ready
   // Business timeline
   timeline?: BusinessTimelineEntry[];
   lastBusinessEventWeek?: number;

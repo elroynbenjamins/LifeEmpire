@@ -9,6 +9,7 @@ import TutorialDock, { tutorialSnapshot } from '../TutorialDock';
 import TutorialModal from '../TutorialModal';
 import TutorialLauncher from '../TutorialLauncher';
 import GameButton from '../GameButton';
+import WeekSummarySheet from '../WeekSummarySheet';
 
 let mockPathname = '/tabs';
 const mockNavigate = jest.fn();
@@ -55,6 +56,20 @@ function startAtWeekStep() {
     sessions: [{ ...newTutorialSession(snapshot), completed: TUTORIAL_STEPS.slice(0, 4).map((step) => step.id) }],
   });
 }
+
+test('the weekly-result lesson appears inside the real summary and completes on Continue', () => {
+  startAtWeekStep();
+  useGameStore.setState({ week: 2, showSummary: true,
+    lastSummary: { newWeek: 2, salaryEarned: 0 } as any,
+    dismissSummary: jest.fn(() => useGameStore.setState({ showSummary: false })),
+  });
+  const view = render(<WeekSummarySheet />);
+  expect(currentStep()?.id).toBe('weekly_result');
+  expect(view.getByText(/This is the week just completed/)).toBeTruthy();
+  fireEvent.press(view.getByText('Continue'));
+  expect(currentStep()).toBeNull();
+  expect(useGameStore.getState().showSummary).toBe(false);
+});
 
 test('an existing save does not automatically get a tutorial or highlight', () => {
   const view = render(<TutorialDock />);

@@ -253,7 +253,7 @@ describe('expanded relationship progression', () => {
     expect(result.familyCost).toBeGreaterThan(0);
   });
 
-  it('completes a shared cash-buffer goal through normal gameplay', () => {
+  it('clears legacy shared goals without awarding a relationship bonus', () => {
     const partner: RelationshipConnection = {
       id: 'goal-partner',
       name: 'Laura',
@@ -297,9 +297,8 @@ describe('expanded relationship progression', () => {
       },
     });
 
-    expect(result.state.sharedGoal?.completed).toBe(true);
-    expect(result.relationshipGoalCompleted).toContain('cash buffer');
-    expect(result.relationshipChange).toBeGreaterThanOrEqual(5);
+    expect(result.state.sharedGoal).toBeNull();
+    expect(result.relationshipChange).toBeLessThan(5);
   });
 
   it('stops partner household contributions while the partner is unemployed', () => {

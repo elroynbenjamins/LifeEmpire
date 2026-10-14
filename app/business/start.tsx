@@ -62,7 +62,7 @@ export default function StartBusinessScreen() {
       <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionTitle}>Available Cash: <Text style={{ color: Colors.primary }}>{formatCurrency(cash)}</Text></Text>
 
-        <BusinessCapacityPanel />
+        {atCapacity ? <BusinessCapacityPanel /> : <Text style={styles.typeDesc}>{businessCapacity - businesses.length} company slots available</Text>}
 
         {/* Industry Filter */}
         <Text style={styles.label}>Industry</Text>
@@ -125,7 +125,7 @@ export default function StartBusinessScreen() {
             <View style={styles.staffWarning}>
               <Ionicons name="information-circle" size={16} color={Colors.warning} />
               <Text style={styles.staffWarningText}>
-                You must hire at least 3 employees before the business can start earning revenue.
+                The company starts with no operating cash. Keep personal cash available to fund it and hire at least 3 employees before it can earn revenue.
               </Text>
             </View>
             <Text style={styles.label}>Business Name (optional)</Text>

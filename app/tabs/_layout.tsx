@@ -69,7 +69,7 @@ export default function TabsLayout() {
         name="career"
         options={{
           title: 'Career',
-          href: null,
+          tabBarIcon: ({ color, size, focused }) => <TabIcon tutorialRoute="/tabs/career" name="briefcase" color={color} size={size} focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -105,7 +105,7 @@ export default function TabsLayout() {
         name="statistics"
         options={{
           title: 'Statistics',
-          tabBarIcon: ({ color, size, focused }) => <TabIcon name="stats-chart" color={color} size={size} focused={focused} />,
+          href: null,
         }}
       />
     </Tabs>

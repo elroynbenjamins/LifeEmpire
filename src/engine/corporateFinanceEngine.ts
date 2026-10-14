@@ -4,6 +4,7 @@ import {
   CorporateFinancingType,
   OwnedBusiness,
 } from '../types/game';
+import { getBusinessLendingValue } from './businessLendingEngine';
 import { getCorporateScaleTier } from './corporateScaleEngine';
 import { getBusinessGovernanceEffects } from './businessGovernanceEngine';
 import { getCorporateWorkforceEffects } from './businessWorkforceEngine';
@@ -143,7 +144,7 @@ export function getCorporateCreditProfile(business: OwnedBusiness): CorporateCre
     BB: 0.30,
     B: 0.20,
   };
-  const maxDebtCapacity = Math.round(valuation * ratingCapacityFactor[rating]);
+  const maxDebtCapacity = Math.round(getBusinessLendingValue(business) * ratingCapacityFactor[rating]);
   const remainingDebtCapacity = Math.max(0, maxDebtCapacity - totalDebt);
 
   const revolverBase = valuation * (rating === 'B' ? 0.04 : rating === 'BB' ? 0.06 : 0.08);
