@@ -1,5 +1,5 @@
 import {
-  EMPIRE_ADVISORS, EMPIRE_BOSSES, EMPIRE_CARDS, EMPIRE_COMBOS, EMPIRE_QUARTERS,
+  EMPIRE_ADVISORS, EMPIRE_BOSSES, EMPIRE_CARDS, EMPIRE_COMBOS, EMPIRE_HAND_SIZE, EMPIRE_QUARTERS,
   EmpireRun, buyEmpireOffer, createEmpireRun, currentBoss, discardEmpireCards,
   findEmpireCombo, isEmpireRun, nextEmpireQuarter, playEmpireHand,
   previewEmpireHand, quarterTarget, rerollEmpireShop, retireEmpireCard, suggestEmpireHand, trainEmpireCombo,
@@ -36,11 +36,11 @@ describe('Empire Cards - fixed content contract', () => {
     expect(findEmpireCombo((hand as string[]).map(card))?.id).toBe(id);
   });
 
-  it('begins a 32-card run with 7 drawn cards and deterministic seeded order', () => {
+  it('begins a 32-card run with a full eight-card hand and deterministic seeded order', () => {
     const run = createEmpireRun(12345);
     expect(run.quarter).toBe(1);
-    expect(run.hand).toHaveLength(7);
-    expect(run.deck).toHaveLength(25);
+    expect(run.hand).toHaveLength(EMPIRE_HAND_SIZE);
+    expect(run.deck).toHaveLength(32 - EMPIRE_HAND_SIZE);
     expect(run.handsLeft).toBe(3);
     expect(run.discardsLeft).toBe(2);
     expect(run.capital).toBe(0);
@@ -84,7 +84,7 @@ describe('Empire Cards - fixed content contract', () => {
     const original = JSON.stringify(run);
     const next = discardEmpireCards(run, [0, 1, 2, 3]);
     expect(next.discardsLeft).toBe(1);
-    expect(next.hand).toHaveLength(7);
+    expect(next.hand).toHaveLength(EMPIRE_HAND_SIZE);
     expect(JSON.stringify(run)).toBe(original);
     expect(discardEmpireCards(next, [0, 0])).toBe(next);
     expect(discardEmpireCards({ ...next, discardsLeft: 0 }, [0])).toHaveProperty('discardsLeft', 0);
@@ -106,7 +106,7 @@ describe('Empire Cards - fixed content contract', () => {
     expect(next.quarter).toBe(2);
     expect(next.phase).toBe('play');
     expect(next.score).toBe(0);
-    expect(next.hand).toHaveLength(7);
+    expect(next.hand).toHaveLength(EMPIRE_HAND_SIZE);
     expect(next.handsLeft).toBe(3);
   });
 
@@ -148,8 +148,8 @@ describe('Empire Cards - fixed content contract', () => {
     const result = suggestEmpireHand(run);
     expect(result).toHaveLength(4);
     const best = previewEmpireHand(run, result).points;
-    for (let a = 0; a < 7; a++) for (let b = a + 1; b < 7; b++)
-      for (let c = b + 1; c < 7; c++) for (let d = c + 1; d < 7; d++)
+    for (let a = 0; a < run.hand.length; a++) for (let b = a + 1; b < run.hand.length; b++)
+      for (let c = b + 1; c < run.hand.length; c++) for (let d = c + 1; d < run.hand.length; d++)
         expect(best).toBeGreaterThanOrEqual(previewEmpireHand(run, [a, b, c, d]).points);
     const shop = playEmpireHand({ ...run, score: quarterTarget(run) - 1 }, [0]);
     expect(shop.phase).toBe('shop');

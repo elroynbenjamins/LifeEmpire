@@ -11,6 +11,7 @@ export interface Quarter { name: string; target: number }
 export type Offer = { kind: 'advisor' | 'upgrade' | 'card'; id: string; cost: number };
 export type EmpirePhase = 'play' | 'shop' | 'won' | 'lost';
 export type EmpireDifficulty = 'standard' | 'advanced' | 'tycoon';
+export const EMPIRE_HAND_SIZE = 8;
 /** Challenges are entirely optional, and only award in-mode medals. */
 export type EmpireChallengeId = 'venture_trio' | 'diversified_four' | 'clean_boss' | 'no_discards';
 export const EMPIRE_DIFFICULTIES: Record<EmpireDifficulty, { label: string; multiplier: number; description: string }> = {
@@ -176,7 +177,7 @@ export function createEmpireRun(
     handsLeft: 3, discardsLeft: 2, capital: 0, deck, hand: [], discarded: [],
     advisors: [], upgrades: {}, bosses: bosses.slice(0, 3),
     offers: [], lastMessage: 'Select up to 4 cards, then Play Hand.', lastHandScore: 0, totalHandsPlayed: 0, retiredCards: 0, lastComboId: null,
-  }, 7);
+  }, EMPIRE_HAND_SIZE);
 }
 export function currentBoss(run: EmpireRun): Boss | null {
   const index = [3, 6, 8].indexOf(run.quarter);
@@ -339,7 +340,7 @@ export function playEmpireHand(run: EmpireRun, indices: number[]): EmpireRun {
     return makeOffers({ ...next, phase: 'shop', capital: next.capital + reward, lastMessage: 'Quarter cleared! +' + reward + ' Run Capital.' });
   }
   if (next.handsLeft === 0) return { ...next, phase: 'lost', lastMessage: 'The quarter target was not reached. Run over.' };
-  next = pull(next, Math.max(0, 7 - next.hand.length));
+  next = pull(next, Math.max(0, EMPIRE_HAND_SIZE - next.hand.length));
   return next;
 }
 export function discardEmpireCards(run: EmpireRun, indices: number[]): EmpireRun {
@@ -410,7 +411,7 @@ export function nextEmpireQuarter(run: EmpireRun): EmpireRun {
     handsLeft: run.quarter + 1 >= 5 ? 4 : 3, discardsLeft: run.quarter + 1 >= 5 ? 3 : 2, seed, deck, hand: [], discarded: [], offers: [],
     lastHandScore: 0, quarterUsedDiscard: false, lastMessage: 'A new quarter begins. Select your cards.',
   };
-  return pull(next, 7);
+  return pull(next, EMPIRE_HAND_SIZE);
 }
 export function isEmpireRun(value: unknown): value is EmpireRun {
   if (!value || typeof value !== 'object') return false;

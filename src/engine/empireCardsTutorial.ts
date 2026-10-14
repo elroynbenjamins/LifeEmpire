@@ -14,20 +14,20 @@ export type EmpireContextTip = 'shop' | 'boss';
 export type EmpireTourSection = 'intro' | EmpireContextTip | 'all';
 
 export const EMPIRE_TUTORIAL_STEPS: readonly EmpireTutorialStep[] = [
-  { id: 'goal', title: 'Reach the quarter target',
-    text: 'Score enough points before your hands run out. The progress bar shows how close you are.',
+  { id: 'goal', title: 'Clear the target to advance',
+    text: 'The target is this quarter\'s growth requirement. Reach it before your hands run out to advance, earn Run Capital, and improve your deck. Miss it and the run ends.',
     focus: 'Score and quarter target' },
-  { id: 'cards', title: 'Choose your cards',
-    text: 'Tap up to four cards. Department combinations increase your score.',
+  { id: 'cards', title: 'Choose a scoring hand',
+    text: 'You see eight cards but play up to four. Their points make your base score; matching departments unlock combinations and bigger multipliers.',
     focus: 'Your hand' },
-  { id: 'preview', title: 'Watch the live preview',
-    text: 'Try different selections to compare points, combos and Advisor bonuses before playing.',
+  { id: 'preview', title: 'Plan the points you need',
+    text: 'The preview shows base points, multipliers and how much remains to the target. Test options before playing so each hand moves the score meaningfully.',
     focus: 'Combination and score preview' },
   { id: 'actions', title: 'Play or replace',
-    text: 'Play Hand uses a turn. Discard Mode lets you replace cards using a limited discard.',
+    text: 'A played hand spends one of your limited turns. Discards replace weak cards without adding points, helping you find a better combination.',
     focus: 'Play Hand and Discard Mode' },
   { id: 'hint', title: 'Get advice, not answers',
-    text: 'Strategy Hint offers guidance without choosing any cards. You make every decision.',
+    text: 'Strategy Hint suggests a route toward this target without choosing cards or spending a turn. You make every decision.',
     focus: 'Strategy Hint button' },
   { id: 'shop', title: 'Invest between quarters',
     text: 'Spend Run Capital on Advisors, combo training and deck improvements after clearing a quarter.',
@@ -38,7 +38,7 @@ export const EMPIRE_TUTORIAL_STEPS: readonly EmpireTutorialStep[] = [
 ];
 
 export interface EmpireTutorialProgress {
-  version: 1;
+  version: 2;
   introSeen: boolean;
   shopSeen: boolean;
   bossSeen: boolean;
@@ -46,15 +46,15 @@ export interface EmpireTutorialProgress {
 }
 
 export function emptyEmpireTutorialProgress(): EmpireTutorialProgress {
-  return { version: 1, introSeen: false, shopSeen: false, bossSeen: false, disableAuto: false };
+  return { version: 2, introSeen: false, shopSeen: false, bossSeen: false, disableAuto: false };
 }
 
 export function readEmpireTutorialProgress(value: unknown): EmpireTutorialProgress {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return emptyEmpireTutorialProgress();
   const raw = value as Partial<EmpireTutorialProgress>;
-  if (raw.version !== 1) return emptyEmpireTutorialProgress();
+  if (raw.version !== 2) return emptyEmpireTutorialProgress();
   return {
-    version: 1,
+    version: 2,
     introSeen: raw.introSeen === true,
     shopSeen: raw.shopSeen === true,
     bossSeen: raw.bossSeen === true,
@@ -64,7 +64,7 @@ export function readEmpireTutorialProgress(value: unknown): EmpireTutorialProgre
 
 /** Mark only the tutorial segment actually seen. Never alter a run's state or rewards. */
 export function markEmpireTutorialSeen(progress: EmpireTutorialProgress, section: EmpireTourSection): EmpireTutorialProgress {
-  if (section === 'all') return { version: 1, introSeen: true, shopSeen: true, bossSeen: true, disableAuto: true };
+  if (section === 'all') return { version: 2, introSeen: true, shopSeen: true, bossSeen: true, disableAuto: true };
   return { ...progress, [section === 'intro' ? 'introSeen' : section === 'shop' ? 'shopSeen' : 'bossSeen']: true };
 }
 

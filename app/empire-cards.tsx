@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, BackHandler, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,8 +46,7 @@ export default function EmpireCardsScreen() {
   const isStandalone = entryMode === 'standalone';
   const fromMainMenu = isStandalone && entryFrom === 'main-menu';
   const reduceMotion = useEmpireReducedMotion();
-  const { width: viewportWidth } = useWindowDimensions();
-  const handColumns: 3 | 4 = viewportWidth < 380 ? 3 : 4;
+  const handColumns = 4;
   const activeSlot = useGameStore(s => s.activeSlot ?? 0);
   const storageKeys = getEmpireCardsStorageKeys(isStandalone ? 'standalone' : 'save', activeSlot);
   const storageKey = storageKeys.run;
@@ -268,7 +267,7 @@ export default function EmpireCardsScreen() {
         {readyKey !== storageKey ? <Text style={styles.muted}>Loading saved run...</Text> : !run ? (
           <>
             <GameCard variant="hero" title="Build a Business Empire" eyebrow="OPTIONAL ACTIVITY" accentColor={Colors.business}>
-              <Text style={styles.description}>Draw 7 cards, select up to 4, and combine departments to score. Clear each target before your hands run out; then recruit Advisors and improve your deck between quarters.</Text>
+              <Text style={styles.description}>Draw 8 cards, select up to 4, and combine departments to score. Clear each target before your hands run out to advance, earn Run Capital, and improve your deck between quarters.</Text>
               <View style={styles.factRow}>
                 <Text style={styles.fact}>32 starting cards</Text><Text style={styles.fact}>15 Advisors</Text>
                 <Text style={styles.fact}>8 combinations</Text><Text style={styles.fact}>8 quarters</Text>
@@ -390,7 +389,7 @@ export default function EmpireCardsScreen() {
                   <Text style={styles.note}>{strategyHint.context}</Text>
                   <Text style={styles.note}>A hint never selects, plays or discards cards for you.</Text>
                 </View>}
-                {run.quarter === 1 && run.totalHandsPlayed === 0 && <Text style={styles.firstHandNote}>Try selecting 2–4 cards and watch the preview update. Nothing is played until you tap Play Hand.</Text>}
+                {run.quarter === 1 && run.totalHandsPlayed === 0 && <Text style={styles.firstHandNote}>Reach the target before your hands run out to advance and earn Run Capital. Try 2–4 cards and compare the preview before you play.</Text>}
                 <Text style={styles.note}>
                   CORE 20–24 · GROWTH 26–30 · FLAGSHIP 32–34 points. These are visual tiers, not rarity.
                   {boss && !run.advisors.includes('crisis') ? ' ⚠ marks cards weakened by this boss.' : ''}

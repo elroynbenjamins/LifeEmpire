@@ -15,6 +15,8 @@ describe('Empire Cards compact onboarding', () => {
       expect(step.text.length).toBeLessThan(165);
       expect(step.focus.length).toBeGreaterThan(4);
     }
+    expect(EMPIRE_TUTORIAL_STEPS[0].text).toContain('Run Capital');
+    expect(EMPIRE_TUTORIAL_STEPS[0].text).toContain('run ends');
     expect(EMPIRE_TUTORIAL_STEPS[4].text).toContain('without choosing');
   });
 
@@ -57,7 +59,7 @@ describe('Empire Cards compact onboarding', () => {
     const run = createEmpireRun(2104);
     const disabled = markEmpireTutorialSeen(emptyEmpireTutorialProgress(), 'all');
     expect(disabled).toEqual({
-      version: 1, introSeen: true, shopSeen: true, bossSeen: true, disableAuto: true,
+      version: 2, introSeen: true, shopSeen: true, bossSeen: true, disableAuto: true,
     });
     expect(shouldShowEmpireIntro(run, disabled)).toBe(false);
     expect(getEmpireContextTip({ ...run, phase: 'shop' }, disabled)).toBeNull();
@@ -70,9 +72,9 @@ describe('Empire Cards compact onboarding', () => {
     expect(readEmpireTutorialProgress(null)).toEqual(initial);
     expect(readEmpireTutorialProgress('invalid')).toEqual(initial);
     expect(readEmpireTutorialProgress([])).toEqual(initial);
-    expect(readEmpireTutorialProgress({ version: 2, introSeen: true })).toEqual(initial);
+    expect(readEmpireTutorialProgress({ version: 1, introSeen: true })).toEqual(initial);
     expect(readEmpireTutorialProgress({
-      version: 1, introSeen: true, shopSeen: 'yes', bossSeen: 1, disableAuto: false,
+      version: 2, introSeen: true, shopSeen: 'yes', bossSeen: 1, disableAuto: false,
     })).toEqual({ ...initial, introSeen: true });
     const stored = markEmpireTutorialSeen(markEmpireTutorialSeen(initial, 'shop'), 'intro');
     expect(readEmpireTutorialProgress(JSON.parse(JSON.stringify(stored)))).toEqual(stored);
