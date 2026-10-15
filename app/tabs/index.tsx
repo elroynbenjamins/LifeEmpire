@@ -408,8 +408,8 @@ export default function DashboardScreen() {
 function QuickLink({ icon, label, onPress, color, notification }: { icon: string; label: string; onPress: () => void; color?: string; notification?: boolean }) {
   return (
     <Pressable style={styles.quickLink} onPress={onPress}>
-      <Ionicons name={icon as any} size={20} color={color ?? Colors.primary} />
-      <Text style={styles.quickLinkText}>{label}</Text>
+      <Ionicons name={icon as any} size={18} color={color ?? Colors.primary} />
+      <Text style={styles.quickLinkText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{label}</Text>
       {notification && <View style={styles.notificationDot} />}
     </Pressable>
   );
@@ -455,6 +455,6 @@ const styles = StyleSheet.create({
   sectionLabel: { color: Colors.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginTop: 4, marginBottom: 8 },
   linksRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginVertical: 4 },
   quickLink: { flexBasis: '31%', flexGrow: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, backgroundColor: Colors.card, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 12, borderWidth: 1, borderColor: Colors.cardBorder },
-  quickLinkText: { color: Colors.textPrimary, fontSize: 13, fontWeight: '500' },
+  quickLinkText: { color: Colors.textPrimary, fontSize: 13, fontWeight: '500', flexShrink: 1, minWidth: 0 },
   notificationDot: { position: 'absolute', top: 7, right: 7, width: 9, height: 9, borderRadius: 5, backgroundColor: Colors.negative },
 });
