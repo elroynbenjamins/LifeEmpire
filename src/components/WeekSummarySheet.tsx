@@ -149,7 +149,7 @@ export default function WeekSummarySheet() {
             {reportLesson && (
               <View style={styles.pendingDecisionBox}>
                 <Text style={styles.eventDesc}>
-                  This is an operating cash-flow subtotal, including net property income. Trades, business payouts and one-off payments can change your actual cash separately. Open Financial Breakdown or Weekly Activity for more.
+                  This is the week just completed: tracked income minus expenses and tax, including property income after maintenance. Trades, business payouts and one-off payments can change actual cash separately. Open Financial Breakdown or Weekly Activity for details.
                 </Text>
               </View>
             )}
