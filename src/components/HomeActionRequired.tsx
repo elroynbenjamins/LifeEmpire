@@ -6,7 +6,7 @@ import { Colors } from '../theme/colors';
 
 export default function HomeActionRequired({
   actions, onOpen,
-}: { actions: HomeAction[]; onOpen: (route: HomeAction['route']) => void }) {
+}: { actions: HomeAction[]; onOpen: (action: HomeAction) => void }) {
   const [expanded, setExpanded] = useState(false);
   if (!actions.length) return null;
   const shown = expanded ? actions : actions.slice(0, 2);
@@ -17,7 +17,7 @@ export default function HomeActionRequired({
       <Text style={styles.count}>{actions.length}</Text>
     </View>
     {shown.map(item => (
-      <Pressable key={item.id} accessibilityRole="button" onPress={() => onOpen(item.route)}
+      <Pressable key={item.id} accessibilityRole="button" onPress={() => onOpen(item)}
         style={styles.action}>
         <View style={styles.copy}>
           <Text numberOfLines={2} style={[styles.title, item.urgent && { color: Colors.warning }]}>{item.title}</Text>
