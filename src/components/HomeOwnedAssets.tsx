@@ -91,11 +91,11 @@ export default function HomeOwnedAssets({
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
   column: { flex: 1, minWidth: 0 },
-  compactCard: { minHeight: 142, paddingHorizontal: 10, paddingVertical: 11 },
+  compactCard: { minHeight: 116, paddingHorizontal: 9, paddingVertical: 8 },
   count: { color: Colors.primary, fontSize: 20, fontWeight: '700' },
-  compactCount: { fontSize: 17, lineHeight: 22 },
+  compactCount: { fontSize: 16, lineHeight: 20 },
   caption: { color: Colors.textMuted, fontSize: 12, marginTop: 4 },
-  compactCaption: { color: Colors.textMuted, fontSize: 10, marginTop: 7 },
+  compactCaption: { color: Colors.textMuted, fontSize: 10, marginTop: 5 },
   compactValue: { color: Colors.textPrimary, fontSize: 14, fontWeight: '800', marginTop: 2 },
   compactNotice: { fontSize: 10, lineHeight: 13, marginTop: 5 },
 });
