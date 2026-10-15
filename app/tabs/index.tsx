@@ -38,6 +38,7 @@ export default function DashboardScreen() {
     homeUiStorageKey(activeSlot), HOME_UI_DEFAULTS, readHomeUiPreferences,
   );
   const [customizing, setCustomizing] = useState(false);
+  const visiblePrefs = preferencesReady ? preferences : HOME_UI_DEFAULTS;
   const toggleSection = (section: HomeUiSection) => {
     if (!preferencesReady) return;
     setPreferences(previous => ({ ...previous, [section]: !previous[section] }));
@@ -259,7 +260,7 @@ export default function DashboardScreen() {
         }} />
         <FirstStepsCard />
 
-        {preferences.annualReport && latestAnnualReport && (
+        {visiblePrefs.annualReport && latestAnnualReport && (
           <GameCard
             variant="subtle"
             eyebrow="YEARLY REPORT"
@@ -287,7 +288,7 @@ export default function DashboardScreen() {
           </GameCard>
         )}
 
-        {preferences.pinnedGoals && activePinnedGoals.length > 0 && (
+        {visiblePrefs.pinnedGoals && activePinnedGoals.length > 0 && (
           <GameCard
             variant="subtle"
             eyebrow="PERSONAL GOALS"
@@ -334,7 +335,7 @@ export default function DashboardScreen() {
           );
         })() : null}
 
-        {preferences.news && !!currentHeadline && (
+        {visiblePrefs.news && !!currentHeadline && (
           <Pressable accessibilityRole="button" accessibilityLabel="Open market news" onPress={() => router.push('/news')}
             style={styles.newsCompact}>
             <Ionicons name="newspaper-outline" size={15} color={Colors.warning}/>
@@ -344,7 +345,7 @@ export default function DashboardScreen() {
         )}
 
         {/* Personal Life */}
-        {preferences.personalLife && relationshipModeEnabled && (
+        {visiblePrefs.personalLife && relationshipModeEnabled && (
           <GameCard title="Personal Life" onPress={() => router.push('/relationships')}>
             {partner ? (
               <>
@@ -360,7 +361,7 @@ export default function DashboardScreen() {
           </GameCard>
         )}
 
-        {preferences.investments && <HomeFinancialAssets
+        {visiblePrefs.investments && <HomeFinancialAssets
           viewportWidth={viewportWidth}
           holdingCount={holdings.length}
           portfolioValue={portfolioValue}
@@ -371,7 +372,7 @@ export default function DashboardScreen() {
         />}
 
         {/* Owned assets: side by side on phones when both are owned. */}
-        {preferences.ownedAssets && <HomeOwnedAssets
+        {visiblePrefs.ownedAssets && <HomeOwnedAssets
           viewportWidth={viewportWidth}
           businessCount={businesses.length}
           weeklyBusinessProfit={businesses.reduce((total, business) => total + (business?.lastWeekProfit ?? 0), 0)}
