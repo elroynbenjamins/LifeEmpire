@@ -5,6 +5,8 @@ export type HomeAction = {
   title: string;
   detail: string;
   route: '/business' | '/loans';
+  businessId?: string;
+  focus?: 'decision' | 'cash-management';
   urgent: boolean;
 };
 
@@ -24,7 +26,7 @@ export function getHomeRequiredActions(input: {
         id: 'decision:' + business.id,
         title: business.name + ': ' + decision.title,
         detail: left === 0 ? 'Decision due now' : left === 1 ? '1 week until auto-resolution' : left + ' weeks until auto-resolution',
-        route: '/business',
+        route: '/business', businessId: business.id, focus: 'decision',
         urgent: decision.kind === 'crisis' || left <= 1,
       });
     } else if (business.balance < 0) {
@@ -32,7 +34,7 @@ export function getHomeRequiredActions(input: {
         id: 'business-cash:' + business.id,
         title: business.name + ' has negative company cash',
         detail: 'Review its finances and financing options',
-        route: '/business', urgent: true,
+        route: '/business', businessId: business.id, focus: 'cash-management', urgent: true,
       });
     }
   }
