@@ -11,6 +11,7 @@ import { getTutorialStep } from '../engine/tutorialEngine';
 import { tutorialSnapshot } from './TutorialDock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSlotUiPreferences } from '../hooks/useSlotUiPreferences';
+import { getCompactWeeklyHighlights } from '../engine/compactWeeklyReport';
 import {
   WEEKLY_RESULTS_DEFAULTS, readWeeklyResultsPreferences, weeklyResultsStorageKey,
 } from '../engine/homeUiPreferences';
@@ -56,19 +57,7 @@ export default function WeekSummarySheet() {
     (summary?.relationshipEventTitle ? 1 : 0) +
     (summary?.diedThisWeek ? 1 : 0);
   const detailsVisible = !weeklyPrefs.compact || showCompleteSummary || reportLesson;
-  const keyHighlights = [
-    ...(pendingDecisionCount > 0 ? [pendingDecisionCount + ' important follow-up' + (pendingDecisionCount === 1 ? '' : 's') + ' after continuing'] : []),
-    ...(summary.diedThisWeek ? ['Life complete: succession follows this report'] : []),
-    ...(summary.crashEvent ? ['Recession: ' + summary.crashEvent.title] : []),
-    ...(summary.inflationEvent ? ['Yearly inflation changed costs and salaries'] : []),
-    ...(summary.careerPromotion ? ['Career promotion earned'] : []),
-    ...(summary.careerRaise ? ['Salary increased'] : []),
-    ...(summary.relationshipEventTitle ? ['Personal life: ' + summary.relationshipEventTitle] : []),
-    ...(summary.marketEventTitle ? ['Market: ' + summary.marketEventTitle] : []),
-    ...((summary.newAchievements?.length ?? 0) > 0 ? [summary.newAchievements!.length + ' achievement' + (summary.newAchievements!.length === 1 ? '' : 's') + ' unlocked'] : []),
-    ...((summary.auctionResults?.length ?? 0) > 0 ? [summary.auctionResults!.length + ' property auction result' + (summary.auctionResults!.length === 1 ? '' : 's')] : []),
-  ];
-
+  const keyHighlights = getCompactWeeklyHighlights(summary, pendingDecisionCount);
   return (
     <Modal visible transparent animationType="slide">
       <View style={styles.backdrop}>
