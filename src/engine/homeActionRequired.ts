@@ -22,6 +22,9 @@ export function getHomeRequiredActions(input: {
     const decision = business.pendingDecision;
     if (decision) {
       const left = Math.max(0, decision.deadlineGlobalWeek - input.globalWeek);
+      // The Business screen already exposes routine decisions. Reserve Home
+      // alerts for crises, company cash trouble and choices close to expiry.
+      if (decision.kind !== 'crisis' && left > 2 && business.balance >= 0) continue;
       actions.push({
         id: 'decision:' + business.id,
         title: business.name + ': ' + decision.title,
