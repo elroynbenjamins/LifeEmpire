@@ -14,11 +14,15 @@ describe('Compact weekly results important facts', () => {
       relationshipEventTitle: 'Relationship decision',
       newAchievements: ['award-a', 'award-b'],
     }), 2);
-    expect(highlights[0]).toMatch(/2 important follow-ups/);
+    expect(highlights[0]).toMatch(/1 important follow-up/);
     expect(highlights).toContain('Life complete: succession follows this report');
     expect(highlights).toContain('Recession: A recession');
     expect(highlights).toContain('Career promotion earned');
     expect(highlights).toContain('2 achievements unlocked');
+  });
+  it('does not show a duplicate follow-up on succession-only weeks', () => {
+    const highlights = getCompactWeeklyHighlights(report({ diedThisWeek: true }), 1);
+    expect(highlights).toEqual(['Life complete: succession follows this report']);
   });
   it('keeps major family, stalled promotions and investment outcomes visible', () => {
     const highlights = getCompactWeeklyHighlights(report({
