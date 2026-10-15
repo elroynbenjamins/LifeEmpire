@@ -13,7 +13,7 @@ describe('Empire Cards compact guide UI', () => {
         onNext={onNext} onSkip={onSkip} onDisable={onDisable} onBack={onBack} />
     );
     expect(screen.getByText('QUICK GUIDE · 1/5')).toBeTruthy();
-    expect(screen.getByText('Reach the quarter target')).toBeTruthy();
+    expect(screen.getByText(EMPIRE_TUTORIAL_STEPS[0].title)).toBeTruthy();
     expect(screen.getByText(/Look at: Score and quarter target/)).toBeTruthy();
     fireEvent.press(screen.getByText('Next'));
     fireEvent.press(screen.getByText('Skip'));
