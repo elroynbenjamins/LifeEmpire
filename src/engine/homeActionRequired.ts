@@ -47,7 +47,7 @@ export function getHomeRequiredActions(input: {
       detail: 'Review your bank and repayments', route: '/loans', urgent: true });
   } else if (input.cash + input.projectedWeeklyFlow < 0) {
     actions.push({ id: 'cash-shortfall', title: 'Possible cash shortfall next week',
-      detail: 'Based on wages and regular bills, excluding investment and rental income', route: '/loans', urgent: true });
+      detail: 'Based on regular income and costs, excluding one-off gains and dividends', route: '/loans', urgent: true });
   }
   return actions.sort((a, b) => Number(b.urgent) - Number(a.urgent));
 }
