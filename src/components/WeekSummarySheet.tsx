@@ -23,6 +23,7 @@ export default function WeekSummarySheet() {
   const [showFinancialDetails, setShowFinancialDetails] = useState(false);
   const [showActivityDetails, setShowActivityDetails] = useState(false);
   const [showCompleteSummary, setShowCompleteSummary] = useState(false);
+  const [showAllHighlights, setShowAllHighlights] = useState(false);
   const activeSlot = useGameStore(s => s.activeSlot ?? 0);
   const [weeklyPrefs, setWeeklyPrefs, weeklyPrefsReady] = useSlotUiPreferences(
     weeklyResultsStorageKey(activeSlot), WEEKLY_RESULTS_DEFAULTS, readWeeklyResultsPreferences,
@@ -36,6 +37,7 @@ export default function WeekSummarySheet() {
   useEffect(() => {
     if (showSummary) useTutorialStore.getState().reconcile(tutorialSnapshot());
     setShowCompleteSummary(false);
+    setShowAllHighlights(false);
     setShowFinancialDetails(false);
     setShowActivityDetails(false);
   }, [showSummary, summary]);
@@ -56,7 +58,7 @@ export default function WeekSummarySheet() {
     ((summary?.lifeEvent?.type === 'choice' || summary?.lifeEvent?.type === 'opportunity') ? 1 : 0) +
     (summary?.relationshipEventTitle ? 1 : 0) +
     (summary?.diedThisWeek ? 1 : 0);
-  const detailsVisible = !weeklyPrefs.compact || showCompleteSummary || reportLesson;
+  const detailsVisible = !weeklyPrefsReady || !weeklyPrefs.compact || showCompleteSummary || reportLesson;
   const keyHighlights = getCompactWeeklyHighlights(summary, pendingDecisionCount);
   return (
     <Modal visible transparent animationType="slide">
@@ -99,9 +101,12 @@ export default function WeekSummarySheet() {
             </View>
             {keyHighlights.length > 0 && <View style={styles.compactHighlights}>
               <Text style={styles.compactHeading}>Important this week</Text>
-              {keyHighlights.slice(0, 4).map((highlight, index) =>
+              {(showAllHighlights ? keyHighlights : keyHighlights.slice(0, 4)).map((highlight, index) =>
                 <Text key={index} numberOfLines={2} style={styles.compactHighlight}>• {highlight}</Text>)}
-              {keyHighlights.length > 4 && <Text style={styles.compactMetric}>+{keyHighlights.length - 4} more in full report</Text>}
+              {keyHighlights.length > 4 && <Pressable accessibilityRole="button" onPress={() => setShowAllHighlights(v => !v)}
+                style={styles.highlightsToggle}>
+                <Text style={styles.fullReportText}>{showAllHighlights ? 'Show fewer updates' : 'Show ' + (keyHighlights.length - 4) + ' more updates'}</Text>
+              </Pressable>}
             </View>}
             <Pressable accessibilityRole="button" onPress={() => setShowCompleteSummary(true)} style={styles.fullReportButton}>
               <Text style={styles.fullReportText}>Show full weekly report</Text>
@@ -569,6 +574,7 @@ const styles = StyleSheet.create({
   compactMetrics: { flexDirection: 'row', gap: 12, flexWrap: 'wrap', marginTop: 4 },
   compactMetric: { color: Colors.textSecondary, fontSize: 11 },
   compactHighlights: { borderTopWidth: 1, borderTopColor: Colors.cardBorder, marginTop: 10, paddingTop: 8 },
+  highlightsToggle: { minHeight: 34, justifyContent: 'center', alignSelf: 'flex-start', marginTop: 4 },
   compactHeading: { color: Colors.warning, fontSize: 11, fontWeight: '800', marginBottom: 3 },
   compactHighlight: { color: Colors.textSecondary, fontSize: 11, lineHeight: 16, marginTop: 2 },
   fullReportButton: { alignSelf: 'flex-start', minHeight: 38, paddingVertical: 10, marginTop: 8 },
