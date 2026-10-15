@@ -2,8 +2,11 @@ import type { WeekSummary } from '../types/game';
 
 /** Only consequential events belong in the compact view; full report stays accessible. */
 export function getCompactWeeklyHighlights(summary: WeekSummary, pendingDecisionCount: number): string[] {
+  // Death already has its own succession message. Don't count it again as a
+  // generic follow-up choice, which would make compact summaries repetitive.
+  const followUpChoices = Math.max(0, pendingDecisionCount - (summary.diedThisWeek ? 1 : 0));
   return [
-    ...(pendingDecisionCount > 0 ? [pendingDecisionCount + ' important follow-up' + (pendingDecisionCount === 1 ? '' : 's') + ' after continuing'] : []),
+    ...(followUpChoices > 0 ? [followUpChoices + ' important follow-up' + (followUpChoices === 1 ? '' : 's') + ' after continuing'] : []),
     ...(summary.diedThisWeek ? ['Life complete: succession follows this report'] : []),
     ...(summary.partnerDiedName ? ['Loss in the family: ' + summary.partnerDiedName] : []),
     ...(summary.crashEvent ? ['Recession: ' + summary.crashEvent.title] : []),
