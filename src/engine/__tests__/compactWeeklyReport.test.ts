@@ -20,4 +20,16 @@ describe('Compact weekly results important facts', () => {
     expect(highlights).toContain('Career promotion earned');
     expect(highlights).toContain('2 achievements unlocked');
   });
+  it('keeps major family, stalled promotions and investment outcomes visible', () => {
+    const highlights = getCompactWeeklyHighlights(report({
+      partnerDiedName: 'Alex',
+      promotionBlockedReason: 'Complete leadership training',
+      familyMilestones: ['Child graduated'],
+      investmentResult: { success: false } as WeekSummary['investmentResult'],
+    }), 0);
+    expect(highlights).toContain('Loss in the family: Alex');
+    expect(highlights).toContain('Promotion requirement: Complete leadership training');
+    expect(highlights).toContain('1 family milestone');
+    expect(highlights).toContain('Investment failed');
+  });
 });
