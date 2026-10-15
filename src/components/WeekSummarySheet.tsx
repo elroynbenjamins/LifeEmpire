@@ -89,7 +89,9 @@ export default function WeekSummarySheet() {
             </Pressable>}
           </View>
 
-          {!detailsVisible && <View style={styles.compactBody}>
+          {!detailsVisible && <ScrollView style={[styles.scroll, styles.compactScroll]}
+            contentContainerStyle={styles.compactScrollContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.compactBody}>
             <Text style={styles.resultLabel}>NET CASH FLOW</Text>
             <Text style={[styles.resultValue, { color: netFlow >= 0 ? Colors.primary : Colors.negative }]}>
               {netFlow >= 0 ? '+' : ''}{formatCurrency(netFlow)}
@@ -111,7 +113,8 @@ export default function WeekSummarySheet() {
             <Pressable accessibilityRole="button" onPress={() => setShowCompleteSummary(true)} style={styles.fullReportButton}>
               <Text style={styles.fullReportText}>Show full weekly report</Text>
             </Pressable>
-          </View>}
+            </View>
+          </ScrollView>}
 
           {detailsVisible && <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.resultHero}>
@@ -567,6 +570,8 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: Colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '84%' },
   compactSheet: { paddingTop: 14 },
+  compactScroll: { flexShrink: 1, minHeight: 0 },
+  compactScrollContent: { paddingBottom: 3 },
   modeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap' },
   modeToggle: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 5 },
   modeText: { color: Colors.textSecondary, fontSize: 11, fontWeight: '700' },
