@@ -22,7 +22,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.elroybenjamins.lifeempire",
-      "versionCode": 216
+      "versionCode": 218
     },
     "web": {
       "favicon": "./assets/life-empire-icon.png",
