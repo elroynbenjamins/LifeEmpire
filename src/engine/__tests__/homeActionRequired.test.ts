@@ -36,6 +36,18 @@ describe('Home action-required priorities', () => {
     expect(result[2]).not.toHaveProperty('businessId');
     expect(result.at(-1)?.route).toBe('/loans');
   });
+  it('avoids filling the Home screen with distant routine choices', () => {
+    const actions = getHomeRequiredActions({
+      businesses: [
+        { id: 'far', name: 'Routine', balance: 1000, pendingDecision: decision('strategy', 50) },
+        { id: 'near', name: 'Deadline', balance: 1000, pendingDecision: decision('strategy', 42) },
+        { id: 'critical', name: 'Risk', balance: 1000, pendingDecision: decision('crisis', 56) },
+      ], cash: 5000, projectedWeeklyFlow: 100, globalWeek: 40,
+    });
+    expect(actions.map(action => action.businessId)).toEqual(['critical', 'near']);
+    expect(actions.find(action => action.businessId === 'far')).toBeUndefined();
+  });
+
   it('keeps financial danger visible even when the company also has a decision', () => {
     const actions = getHomeRequiredActions({
       businesses: [{ id: '7', name: 'Sigma', balance: -500, pendingDecision: decision('crisis', 44) }],
