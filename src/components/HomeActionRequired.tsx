@@ -21,7 +21,7 @@ export default function HomeActionRequired({
         style={styles.action}>
         <View style={styles.copy}>
           <Text numberOfLines={2} style={[styles.title, item.urgent && { color: Colors.warning }]}>{item.title}</Text>
-          <Text numberOfLines={1} style={styles.detail}>{item.detail}</Text>
+          <Text numberOfLines={2} style={styles.detail}>{item.detail}</Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color={Colors.textMuted}/>
       </Pressable>
