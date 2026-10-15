@@ -15,6 +15,7 @@ import useGameStore from '../src/store/gameStore';
 import { formatCurrency } from '../src/utils/format';
 import { getEconomicCycleEffects, getPropertyCyclePurchaseMultiplier, inflated } from '../src/engine/economyEngine';
 import { getTotalPropertyValue, getPropertyWeeklyRent } from '../src/engine/propertyEngine';
+import { getPropertyPortfolioCashFlow } from '../src/engine/propertyPortfolioSummary';
 import { getPrestigeEffects } from '../src/engine/prestigeEngine';
 import propertiesData from '../src/data/properties.json';
 import { showGameDialog } from '../src/components/GameDialog';
@@ -35,15 +36,16 @@ export default function PropertiesScreen() {
   const renovatePropertyAction = useGameStore((s) => s?.renovatePropertyAction);
   const [tab, setTab] = useState<'owned' | 'listings' | 'auctions'>(properties.length > 0 ? 'owned' : 'listings');
   const [showTour, setShowTour] = useState(false);
+  const [expandedPropertyId, setExpandedPropertyId] = useState<string | null>(null);
   useTutorialScreenBlocker(showTour);
   const cyclePhase = economicCycle?.phase ?? 'expansion';
   const cycleEffects = getEconomicCycleEffects(cyclePhase);
   const propertyPurchaseMultiplier = getPropertyCyclePurchaseMultiplier(cyclePhase);
 
   const totalValue = getTotalPropertyValue(properties);
-  const weeklyIncome = properties
-    .filter((p) => p.isRentedOut)
-    .reduce((t, p) => t + getPropertyWeeklyRent(p, inflationMultiplier, rentBonus, cycleEffects.propertyIncomeMultiplier), 0);
+  const propertyFlow = getPropertyPortfolioCashFlow(
+    properties, inflationMultiplier, rentBonus, cycleEffects.propertyIncomeMultiplier,
+  );
 
   const confirmAction = (title: string, msg: string, action: () => void) => {
     const confirmText = title.includes('Bid') ? 'Bid' : title.includes('Sell') ? 'Sell' : title.includes('Inspect') ? 'Inspect' : title.includes('Renovat') ? 'Renovate' : title.includes('Buy') ? 'Buy' : 'Confirm';
@@ -71,7 +73,10 @@ export default function PropertiesScreen() {
           titleAccessory={<StatusPill compact icon="home-outline" label={`${properties.length} owned`} color={Colors.business} />}
         >
           <Text style={styles.summaryValue}>{formatCurrency(totalValue)}</Text>
-          <Text style={styles.summaryCaption}>Rental income {formatCurrency(weeklyIncome)}/week</Text>
+          <Text style={styles.summaryCaption}>Gross rent {formatCurrency(propertyFlow.grossRent)}/wk · Maintenance {formatCurrency(propertyFlow.maintenance)}/wk</Text>
+          <Text style={[styles.summaryCaption, { color: propertyFlow.netCashFlow >= 0 ? Colors.primary : Colors.negative }]}>
+            Net property cash flow {propertyFlow.netCashFlow >= 0 ? '+' : ''}{formatCurrency(propertyFlow.netCashFlow)}/wk
+          </Text>
         </GameCard>
 
         <ScreenTabs
@@ -99,13 +104,14 @@ export default function PropertiesScreen() {
           <>
             <View style={styles.sectionHeading}>
               <Text style={styles.sectionTitle}>My Properties</Text>
-              <Text style={styles.sectionSub}>Manage rent, condition and exit decisions.</Text>
+              <Text style={styles.sectionSub}>Tap a property to manage it. Your portfolio stays compact.</Text>
             </View>
             {properties.map((prop) => {
               const rent = getPropertyWeeklyRent(prop, inflationMultiplier, rentBonus, cycleEffects.propertyIncomeMultiplier);
               const maintenance = inflated(prop.weeklyMaintenance ?? 0, inflationMultiplier);
               const netRent = rent - maintenance;
               const invested = prop.purchasePrice + (prop.inspectionCostPaid ?? 0);
+              const expanded = expandedPropertyId === prop.id;
               return (
                 <GameCard key={prop.id} compact style={styles.propCard}>
                   <View style={styles.itemIntro}>
@@ -125,6 +131,35 @@ export default function PropertiesScreen() {
                     </View>
                   </View>
 
+                  <Pressable accessibilityRole="button"
+                    accessibilityLabel={`${expanded ? 'Collapse' : 'Manage'} ${prop.name}`}
+                    accessibilityState={{ expanded }}
+                    onPress={() => setExpandedPropertyId(current => current === prop.id ? null : prop.id)}
+                    style={styles.ownedCompactRow}>
+                    <View style={styles.ownedCompactStat}>
+                      <Text style={styles.miniLabel}>Value</Text>
+                      <Text style={styles.ownedCompactValue} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(prop.currentValue)}</Text>
+                    </View>
+                    <View style={styles.ownedCompactStat}>
+                      <Text style={styles.miniLabel}>Net / wk</Text>
+                      <Text style={[styles.ownedCompactValue, { color: netRent >= 0 ? Colors.primary : Colors.negative }]}
+                        numberOfLines={1} adjustsFontSizeToFit>{netRent >= 0 ? '+' : ''}{formatCurrency(prop.isRentedOut ? netRent : -maintenance)}</Text>
+                    </View>
+                    <View style={styles.ownedCompactStat}>
+                      <Text style={styles.miniLabel}>Condition</Text>
+                      <Text style={styles.ownedCompactValue}>{prop.conditionScore != null ? `${Math.round(prop.conditionScore)}%` : prop.isRenovated ? 'Renovated' : '—'}</Text>
+                    </View>
+                    <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textSecondary}/>
+                  </Pressable>
+
+                  {prop.hiddenIssue && !prop.isRenovated && (
+                    <View style={styles.issueStrip}>
+                      <Ionicons name="warning-outline" size={14} color={Colors.negative} />
+                      <Text style={styles.issueStripText} numberOfLines={2}>{prop.hiddenIssue}</Text>
+                    </View>
+                  )}
+
+                  {expanded && <>
                   <View style={styles.metricGrid}>
                     <View style={styles.metricCell}>
                       <Text style={styles.miniLabel}>Value</Text>
@@ -141,13 +176,6 @@ export default function PropertiesScreen() {
                       <Text style={styles.metricValue}>{formatCurrency(maintenance)}/wk</Text>
                     </View>
                   </View>
-
-                  {prop.hiddenIssue && !prop.isRenovated && (
-                    <View style={styles.issueStrip}>
-                      <Ionicons name="warning-outline" size={14} color={Colors.negative} />
-                      <Text style={styles.issueStripText} numberOfLines={2}>{prop.hiddenIssue}</Text>
-                    </View>
-                  )}
 
                   {prop.acquisitionType === 'auction' && (
                     <Text style={styles.investmentMeta}>
@@ -191,6 +219,7 @@ export default function PropertiesScreen() {
                       style={styles.cardAction}
                     />
                   </View>
+                  </>}
                 </GameCard>
               );
             })}
@@ -354,7 +383,11 @@ const styles = StyleSheet.create({
   emptyOwnedText: { color: Colors.textMuted, fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 4 },
   pixelArtCard: { alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: 12, marginBottom: 10, overflow: 'hidden' },
   pixelArt: { width: '100%', height: 126 },
-  propCard: { marginBottom: 8 },
+  propCard: { marginBottom: 8, paddingVertical: 9, paddingHorizontal: 11 },
+  ownedCompactRow: { minHeight: 50, marginTop: 5, flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.cardBorder, paddingTop: 6 },
+  ownedCompactStat: { flex: 1, minWidth: 0 },
+  ownedCompactValue: { fontSize: 12, fontWeight: '800', color: Colors.textPrimary, marginTop: 2 },
   itemIntro: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   itemIcon: { width: 60, height: 60, flexShrink: 0 },
   propHeader: { flex: 1, minWidth: 0 },
