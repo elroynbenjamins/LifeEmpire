@@ -25,7 +25,8 @@ export function getHomeRequiredActions(input: {
       actions.push({
         id: 'decision:' + business.id,
         title: business.name + ': ' + decision.title,
-        detail: left === 0 ? 'Decision due now' : left === 1 ? '1 week until auto-resolution' : left + ' weeks until auto-resolution',
+        detail: (left === 0 ? 'Decision due now' : left === 1 ? '1 week until auto-resolution' : left + ' weeks until auto-resolution')
+          + (business.balance < 0 ? ' · Company cash is negative' : ''),
         route: '/business', businessId: business.id, focus: 'decision',
         urgent: decision.kind === 'crisis' || left <= 1,
       });
