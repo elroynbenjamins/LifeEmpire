@@ -246,8 +246,17 @@ export default function DashboardScreen() {
           />
         </GameCard>
 
-        {customizing && preferencesReady && <HomeCustomizePanel preferences={preferences} onToggle={toggleSection} />}
-        <HomeActionRequired actions={requiredActions} onOpen={route => router.push(route)} />
+        {customizing && preferencesReady && <HomeCustomizePanel preferences={preferences} onToggle={toggleSection}
+          onReset={() => setPreferences({ ...HOME_UI_DEFAULTS })} />}
+        <HomeActionRequired actions={requiredActions} onOpen={action => {
+          if (action.businessId) {
+            router.push({ pathname: '/business/[id]', params: {
+              id: action.businessId, ...(action.focus ? { focus: action.focus } : {}),
+            } });
+          } else {
+            router.push(action.route);
+          }
+        }} />
         <FirstStepsCard />
 
         {preferences.annualReport && latestAnnualReport && (
