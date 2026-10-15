@@ -219,7 +219,7 @@ export default function DashboardScreen() {
             <Pressable style={styles.weeklyMetric} onPress={() => router.push('/tabs/career')}>
               <View style={styles.metricHeader}>
                 <Ionicons name="arrow-up-circle-outline" size={15} color={hasIncome ? Colors.primary : Colors.warning} />
-                <Text style={styles.metricLabel}>Income</Text>
+                <Text style={styles.metricLabel}>Job income</Text>
               </View>
               <Text style={[styles.metricValue, { color: hasIncome ? Colors.primary : Colors.warning }]}>
                 {hasIncome ? formatCurrency(displayIncome) : 'Unemployed'}
@@ -232,7 +232,7 @@ export default function DashboardScreen() {
             <Pressable style={styles.weeklyMetric} onPress={() => router.push('/tabs/statistics')}>
               <View style={styles.metricHeader}>
                 <Ionicons name="arrow-down-circle-outline" size={15} color={Colors.negative} />
-                <Text style={styles.metricLabel}>Expenses</Text>
+                <Text style={styles.metricLabel}>Living costs</Text>
               </View>
               <Text style={[styles.metricValue, { color: Colors.negative }]}>{formatCurrency(weeklyExpenses)}</Text>
               <Text style={styles.metricCaption} numberOfLines={1}>Recurring household costs</Text>
@@ -241,7 +241,7 @@ export default function DashboardScreen() {
 
           {(effectivePartnerContribution > 0 || properties.length > 0) && (
             <View style={styles.sharedContribution}>
-              <Ionicons name="heart-outline" size={14} color={Colors.family} />
+              <Ionicons name={effectivePartnerContribution > 0 ? "heart-outline" : "home-outline"} size={14} color={Colors.family} />
               <Text style={styles.sharedContributionText}>
                 {effectivePartnerContribution > 0 ? `${partner?.name ?? 'Partner'} contributes ${formatCurrency(effectivePartnerContribution)}/wk${properties.length > 0 ? ' • ' : ''}` : ''}
                 {properties.length > 0 ? `Property net ${propertyFlow.netCashFlow >= 0 ? '+' : ''}${formatCurrency(propertyFlow.netCashFlow)}/wk (rent ${formatCurrency(propertyFlow.grossRent)} − costs ${formatCurrency(propertyFlow.maintenance)})` : ''}
