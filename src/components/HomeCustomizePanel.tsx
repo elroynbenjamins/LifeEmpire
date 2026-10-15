@@ -13,12 +13,19 @@ const SECTIONS: { id: HomeUiSection; label: string }[] = [
   { id: 'news', label: 'Market news' },
 ];
 
-export default function HomeCustomizePanel({ preferences, onToggle }: {
+export default function HomeCustomizePanel({ preferences, onToggle, onReset }: {
   preferences: HomeUiPreferences;
   onToggle: (section: HomeUiSection) => void;
+  onReset: () => void;
 }) {
   return <View style={styles.panel}>
-    <Text style={styles.title}>Show on dashboard</Text>
+    <View style={styles.headingRow}>
+      <Text style={styles.title}>Show on dashboard</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Restore default dashboard" onPress={onReset}
+        style={styles.resetControl}>
+        <Text style={styles.resetText}>Reset to default</Text>
+      </Pressable>
+    </View>
     <Text style={styles.note}>Your weekly cash flow and important actions always remain visible.</Text>
     <View style={styles.options}>
       {SECTIONS.map(item => <Pressable key={item.id} accessibilityRole="checkbox"
@@ -33,7 +40,10 @@ export default function HomeCustomizePanel({ preferences, onToggle }: {
 }
 const styles = StyleSheet.create({
   panel: { backgroundColor: Colors.elevated, borderRadius: 10, borderWidth: 1, borderColor: Colors.cardBorder, padding: 10, marginBottom: 10 },
-  title: { fontSize: 12, fontWeight: '800', color: Colors.textPrimary },
+  headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title: { flex: 1, fontSize: 12, fontWeight: '800', color: Colors.textPrimary },
+  resetControl: { minHeight: 36, paddingHorizontal: 8, justifyContent: 'center' },
+  resetText: { color: Colors.primary, fontSize: 11, fontWeight: '700' },
   note: { color: Colors.textMuted, fontSize: 10, marginTop: 3, marginBottom: 6 },
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   item: { width: '49%', minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
