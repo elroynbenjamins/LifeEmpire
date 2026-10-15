@@ -10,6 +10,10 @@ import { useTutorialStore } from '../store/tutorialStore';
 import { getTutorialStep } from '../engine/tutorialEngine';
 import { tutorialSnapshot } from './TutorialDock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSlotUiPreferences } from '../hooks/useSlotUiPreferences';
+import {
+  WEEKLY_RESULTS_DEFAULTS, readWeeklyResultsPreferences, weeklyResultsStorageKey,
+} from '../engine/homeUiPreferences';
 
 export default function WeekSummarySheet() {
   const showSummary = useGameStore((s) => s?.showSummary);
@@ -17,6 +21,11 @@ export default function WeekSummarySheet() {
   const dismissSummary = useGameStore((s) => s?.dismissSummary);
   const [showFinancialDetails, setShowFinancialDetails] = useState(false);
   const [showActivityDetails, setShowActivityDetails] = useState(false);
+  const [showCompleteSummary, setShowCompleteSummary] = useState(false);
+  const activeSlot = useGameStore(s => s.activeSlot ?? 0);
+  const [weeklyPrefs, setWeeklyPrefs, weeklyPrefsReady] = useSlotUiPreferences(
+    weeklyResultsStorageKey(activeSlot), WEEKLY_RESULTS_DEFAULTS, readWeeklyResultsPreferences,
+  );
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(12, insets.bottom);
   const sessions = useTutorialStore((s) => s.sessions);
@@ -25,6 +34,9 @@ export default function WeekSummarySheet() {
   const reportLesson = activeScope === tutorialSnapshot().scope && getTutorialStep(session)?.id === 'weekly_result';
   useEffect(() => {
     if (showSummary) useTutorialStore.getState().reconcile(tutorialSnapshot());
+    setShowCompleteSummary(false);
+    setShowFinancialDetails(false);
+    setShowActivityDetails(false);
   }, [showSummary, summary]);
   const continueReport = () => {
     const snapshot = tutorialSnapshot();
@@ -43,11 +55,24 @@ export default function WeekSummarySheet() {
     ((summary?.lifeEvent?.type === 'choice' || summary?.lifeEvent?.type === 'opportunity') ? 1 : 0) +
     (summary?.relationshipEventTitle ? 1 : 0) +
     (summary?.diedThisWeek ? 1 : 0);
+  const detailsVisible = !weeklyPrefs.compact || showCompleteSummary || reportLesson;
+  const keyHighlights = [
+    ...(pendingDecisionCount > 0 ? [pendingDecisionCount + ' important follow-up' + (pendingDecisionCount === 1 ? '' : 's') + ' after continuing'] : []),
+    ...(summary.diedThisWeek ? ['Life complete: succession follows this report'] : []),
+    ...(summary.crashEvent ? ['Recession: ' + summary.crashEvent.title] : []),
+    ...(summary.inflationEvent ? ['Yearly inflation changed costs and salaries'] : []),
+    ...(summary.careerPromotion ? ['Career promotion earned'] : []),
+    ...(summary.careerRaise ? ['Salary increased'] : []),
+    ...(summary.relationshipEventTitle ? ['Personal life: ' + summary.relationshipEventTitle] : []),
+    ...(summary.marketEventTitle ? ['Market: ' + summary.marketEventTitle] : []),
+    ...((summary.newAchievements?.length ?? 0) > 0 ? [summary.newAchievements!.length + ' achievement' + (summary.newAchievements!.length === 1 ? '' : 's') + ' unlocked'] : []),
+    ...((summary.auctionResults?.length ?? 0) > 0 ? [summary.auctionResults!.length + ' property auction result' + (summary.auctionResults!.length === 1 ? '' : 's')] : []),
+  ];
 
   return (
     <Modal visible transparent animationType="slide">
       <View style={styles.backdrop}>
-        <View style={[styles.sheet, { paddingBottom: bottomInset + 14 }]}>
+        <View style={[styles.sheet, !detailsVisible && styles.compactSheet, { paddingBottom: bottomInset + 14 }]}>
           <View style={styles.sheetHeader}>
             <View>
               <Text style={styles.eyebrow}>WEEKLY RESULT</Text>
@@ -61,7 +86,40 @@ export default function WeekSummarySheet() {
             />
           </View>
 
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.modeRow}>
+            <Pressable accessibilityRole="switch" accessibilityState={{ checked: weeklyPrefs.compact }}
+              disabled={!weeklyPrefsReady} onPress={() => setWeeklyPrefs(previous => ({ compact: !previous.compact }))}
+              style={styles.modeToggle}>
+              <Text style={styles.modeText}>{weeklyPrefs.compact ? '✓ ' : '○ '}Compact weekly results</Text>
+            </Pressable>
+            {weeklyPrefs.compact && showCompleteSummary && !reportLesson && <Pressable accessibilityRole="button"
+              onPress={() => setShowCompleteSummary(false)} style={styles.modeToggle}>
+              <Text style={styles.modeText}>Less detail ↑</Text>
+            </Pressable>}
+          </View>
+
+          {!detailsVisible && <View style={styles.compactBody}>
+            <Text style={styles.resultLabel}>NET CASH FLOW</Text>
+            <Text style={[styles.resultValue, { color: netFlow >= 0 ? Colors.primary : Colors.negative }]}>
+              {netFlow >= 0 ? '+' : ''}{formatCurrency(netFlow)}
+            </Text>
+            <View style={styles.compactMetrics}>
+              <Text style={styles.compactMetric}>Income: {formatCurrency(totalIncome)}</Text>
+              <Text style={styles.compactMetric}>Expenses: {formatCurrency(totalExpenses)}</Text>
+              {(summary.taxAmount ?? 0) > 0 && <Text style={styles.compactMetric}>Tax: {formatCurrency(summary.taxAmount)}</Text>}
+            </View>
+            {keyHighlights.length > 0 && <View style={styles.compactHighlights}>
+              <Text style={styles.compactHeading}>Important this week</Text>
+              {keyHighlights.slice(0, 4).map((highlight, index) =>
+                <Text key={index} numberOfLines={2} style={styles.compactHighlight}>• {highlight}</Text>)}
+              {keyHighlights.length > 4 && <Text style={styles.compactMetric}>+{keyHighlights.length - 4} more in full report</Text>}
+            </View>}
+            <Pressable accessibilityRole="button" onPress={() => setShowCompleteSummary(true)} style={styles.fullReportButton}>
+              <Text style={styles.fullReportText}>Show full weekly report</Text>
+            </Pressable>
+          </View>}
+
+          {detailsVisible && <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.resultHero}>
               <Text style={styles.resultLabel}>NET CASH FLOW</Text>
               <Text style={[styles.resultValue, { color: netFlow >= 0 ? Colors.primary : Colors.negative }]}>
@@ -491,7 +549,7 @@ export default function WeekSummarySheet() {
             )}
               </>
             )}
-          </ScrollView>
+          </ScrollView>}
 
           <GameButton label="Continue" trailingIcon="arrow-forward" onPress={continueReport} style={styles.continueButton} />
         </View>
@@ -514,6 +572,18 @@ function Row({ label, value, positive, neutral }: { label: string; value: number
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: Colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '84%' },
+  compactSheet: { paddingTop: 14 },
+  modeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap' },
+  modeToggle: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 5 },
+  modeText: { color: Colors.textSecondary, fontSize: 11, fontWeight: '700' },
+  compactBody: { backgroundColor: Colors.elevated, borderWidth: 1, borderColor: Colors.cardBorder, padding: 12, borderRadius: 12, marginBottom: 10 },
+  compactMetrics: { flexDirection: 'row', gap: 12, flexWrap: 'wrap', marginTop: 4 },
+  compactMetric: { color: Colors.textSecondary, fontSize: 11 },
+  compactHighlights: { borderTopWidth: 1, borderTopColor: Colors.cardBorder, marginTop: 10, paddingTop: 8 },
+  compactHeading: { color: Colors.warning, fontSize: 11, fontWeight: '800', marginBottom: 3 },
+  compactHighlight: { color: Colors.textSecondary, fontSize: 11, lineHeight: 16, marginTop: 2 },
+  fullReportButton: { alignSelf: 'flex-start', minHeight: 38, paddingVertical: 10, marginTop: 8 },
+  fullReportText: { color: Colors.primary, fontSize: 11, fontWeight: '800' },
   sheetHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12 },
   eyebrow: { color: Colors.primary, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   title: { color: Colors.textPrimary, fontSize: 21, fontWeight: '900', marginTop: 2 },
