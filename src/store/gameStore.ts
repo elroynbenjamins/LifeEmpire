@@ -5,6 +5,7 @@ import { getBusinessLoanOffers } from '../engine/businessLoanOffers';
 import { GameState, INITIAL_GAME_STATE, INITIAL_STATISTICS, INITIAL_PROFILE, INITIAL_CAREER_STATE, INITIAL_RELATIONSHIP_STATE, INITIAL_LIFECYCLE_STATE, WeekSummary, ActiveLoan, LifetimeStatistics, PlayerProfile, SaveSlotMeta, PeriodReport, TriggeredEvent, PendingInvestment, TempHappinessEffect, OwnedBusiness, OwnedProperty, BusinessEmployee, BusinessLoan, CareerState, BankDeposit, EducationCareerReminder, DatingPreference, RelationshipConnection, FamilyPlan, MarriageAgreement, RelationshipFinancialObligation, FamilyWorkArrangement, EstatePlanType, EstateStructureType, SuccessionAssetStrategy, SuccessionTaxFinancing, SuccessionHandoverPlan, BusinessStrategicFocus, BusinessGovernanceRole, BusinessExecutiveRole, BusinessBoardMandate, CorporateDepartmentId, CorporateCompensationPolicy, CorporateTrainingPolicy, BusinessReinvestmentArea, BusinessBudgetProfile, AcquisitionFundingMode, AcquisitionIntegrationStrategy, BusinessDelegationPolicy, HoldingCapitalPurpose, HoldingSharedServiceId } from '../types/game';
 import { getLegacyMarketCompanyPool, initializeMarketCompanyPool, initializeStocks, mergeStocks } from '../engine/stockEngine';
 import { weeklyTick } from '../engine/weeklyTick';
+import { getWeeklyCashFlowSummary } from '../engine/weeklyCashFlowSummary';
 import { getNetWorth, getPortfolioValue, getUnrealizedProfitLoss } from '../engine/financeEngine';
 import { applyBusinessDebtPrincipalPrepayment, applyBusinessLoanPrincipalPayment, getBusinessLoanOutstandingPrincipal } from '../engine/businessDebtEngine';
 import { getEconomicCycleEffects, getPropertyCyclePurchaseMultiplier, inflated } from '../engine/economyEngine';
@@ -997,9 +998,9 @@ const useGameStore = create<GameStore>((set, get) => ({
     }
 
     // Accumulate period stats
-    const totalExp = summary.rentPaid + summary.utilityCost + summary.foodCost + summary.carCost + summary.courseCost + summary.loanPayments + (summary.relationshipHouseholdCost ?? 0) + (summary.familyCost ?? 0) + (summary.relationshipObligationCost ?? 0);
-    const newPeriodIncome = (state.periodIncome ?? 0) + summary.salaryEarned + (summary.partTimeIncome ?? 0) + (summary.partnerContribution ?? 0);
-    const newPeriodExpenses = (state.periodExpenses ?? 0) + totalExp;
+    const operatingFlow = getWeeklyCashFlowSummary(summary);
+    const newPeriodIncome = (state.periodIncome ?? 0) + operatingFlow.income;
+    const newPeriodExpenses = (state.periodExpenses ?? 0) + operatingFlow.expenses;
     const newPeriodTax = (state.periodTax ?? 0) + summary.taxAmount;
     const isEmployed = !!(gameState.career?.companyId || gameState.currentJobId);
     const newPeriodWeeksEmployed = (state.periodWeeksEmployed ?? 0) + (isEmployed ? 1 : 0);
