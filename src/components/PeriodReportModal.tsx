@@ -10,11 +10,15 @@ export default function PeriodReportModal() {
   const showPeriodReport = useGameStore((s) => s?.showPeriodReport);
   const periodReport = useGameStore((s) => s?.periodReport);
   const dismissPeriodReport = useGameStore((s) => s?.dismissPeriodReport);
+  const annualReports = useGameStore((s) => s.annualReports ?? []);
 
   if (!showPeriodReport || !periodReport) return null;
 
   const r = periodReport;
   const netFlow = r.totalIncome - r.totalExpenses - r.totalTax;
+  const previousReport = annualReports
+    .filter((report) => report.toWeek < r.toWeek)
+    .sort((a, b) => b.toWeek - a.toWeek)[0] ?? null;
   const yearNumber = Math.floor(r.toWeek / 20);
 
   return (
@@ -37,7 +41,7 @@ export default function PeriodReportModal() {
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
             <View style={styles.resultHero}>
-              <Text style={styles.resultLabel}>NET CASH FLOW</Text>
+              <Text style={styles.resultLabel}>TRACKED CASH FLOW</Text>
               <Text style={[styles.resultValue, { color: netFlow >= 0 ? Colors.primary : Colors.negative }]}>
                 {netFlow >= 0 ? '+' : ''}{formatCurrency(netFlow)}
               </Text>
@@ -58,24 +62,41 @@ export default function PeriodReportModal() {
               </View>
             </View>
 
+            <View style={styles.explanationBox}>
+              <Text style={styles.explanationTitle}>What changed?</Text>
+              {previousReport ? (
+                <>
+                  <Text style={styles.explanationText}>
+                    Cash {r.currentCash - previousReport.currentCash >= 0 ? 'rose' : 'fell'} by {formatCurrency(Math.abs(r.currentCash - previousReport.currentCash))} since the previous annual snapshot.
+                  </Text>
+                  <Text style={styles.explanationText}>
+                    Net worth {r.currentNetWorth - previousReport.currentNetWorth >= 0 ? 'rose' : 'fell'} by {formatCurrency(Math.abs(r.currentNetWorth - previousReport.currentNetWorth))}.
+                  </Text>
+                </>
+              ) : <Text style={styles.explanationText}>This is your first stored annual snapshot. Future reports can compare cash and net worth year over year.</Text>}
+              <Text style={styles.explanationHint}>
+                Tracked cash flow includes wages, rent after maintenance, dividends and recurring bills. Stock trades, property purchases, business payouts, financing and changing asset values can make actual cash and net worth move differently.
+              </Text>
+            </View>
+
             <Text style={styles.sectionLabel}>Investment Performance</Text>
 
             {/* Investment Performance */}
             <View style={styles.row}>
-              <Text style={styles.rowLabel}>Realized P/L</Text>
+              <Text style={styles.rowLabel}>Lifetime Realized P/L</Text>
               <Text style={[styles.rowValue, { color: (r.totalRealizedProfitLoss ?? 0) >= 0 ? Colors.primary : Colors.negative }]}>
                 {(r.totalRealizedProfitLoss ?? 0) >= 0 ? '+' : ''}{formatCurrency(r.totalRealizedProfitLoss ?? 0)}
               </Text>
             </View>
             <View style={styles.row}>
-              <Text style={styles.rowLabel}>Unrealized P/L</Text>
+              <Text style={styles.rowLabel}>Current Unrealized P/L</Text>
               <Text style={[styles.rowValue, { color: (r.totalUnrealizedProfitLoss ?? 0) >= 0 ? Colors.primary : Colors.negative }]}>
                 {(r.totalUnrealizedProfitLoss ?? 0) >= 0 ? '+' : ''}{formatCurrency(r.totalUnrealizedProfitLoss ?? 0)}
               </Text>
             </View>
             {(r.totalDividends ?? 0) > 0 && (
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>Total Dividends</Text>
+                <Text style={styles.rowLabel}>Lifetime Dividends</Text>
                 <Text style={[styles.rowValue, { color: Colors.primary }]}>+{formatCurrency(r.totalDividends ?? 0)}</Text>
               </View>
             )}
@@ -149,6 +170,11 @@ const styles = StyleSheet.create({
   eyebrow: { color: Colors.info, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   title: { color: Colors.textPrimary, fontSize: 21, fontWeight: '900', marginTop: 2 },
   subtitle: { color: Colors.textMuted, fontSize: 10, marginTop: 2 },
+  explanationBox: { backgroundColor: Colors.elevated, padding: 11, borderRadius: 10, borderWidth: 1,
+    borderColor: Colors.cardBorder, marginTop: 9 },
+  explanationTitle: { color: Colors.textPrimary, fontSize: 12, fontWeight: '800', marginBottom: 4 },
+  explanationText: { color: Colors.textSecondary, fontSize: 11, lineHeight: 16, marginTop: 2 },
+  explanationHint: { color: Colors.textMuted, fontSize: 10, lineHeight: 15, marginTop: 6 },
   resultHero: { backgroundColor: Colors.elevated, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: 14, padding: 14, marginBottom: 8 },
   resultLabel: { color: Colors.textMuted, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   resultValue: { fontSize: 28, lineHeight: 34, fontWeight: '900', marginTop: 1, marginBottom: 11 },
