@@ -93,7 +93,7 @@ export default function WeekSummarySheet() {
             </Pressable>}
           </View>
 
-          {!detailsVisible && <ScrollView style={[styles.scroll, styles.compactScroll]}
+          {!detailsVisible && <ScrollView testID="compact-weekly-scroll" style={[styles.scroll, styles.compactScroll]}
             contentContainerStyle={styles.compactScrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.compactBody}>
             <Text style={styles.resultLabel}>NET CASH FLOW</Text>
