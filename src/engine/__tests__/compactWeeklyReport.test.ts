@@ -10,7 +10,7 @@ describe('Compact weekly results important facts', () => {
     const highlights = getCompactWeeklyHighlights(report({
       diedThisWeek: true,
       crashEvent: { title: 'A recession' } as WeekSummary['crashEvent'],
-      careerPromotion: true,
+      careerPromotion: 'Promoted',
       relationshipEventTitle: 'Relationship decision',
       newAchievements: ['award-a', 'award-b'],
     }), 2);
