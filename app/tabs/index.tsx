@@ -25,6 +25,9 @@ import { formatCurrency } from '../../src/utils/format';
 import { getWeeklySalary, getWeeklyRent, getWeeklyUtilityCost, getWeeklyCarCost, getWeeklyFoodCost, getWeeklyCourseCost, getWeeklyLoanPayments } from '../../src/engine/financeEngine';
 import { getCareerSalary } from '../../src/engine/careerEngine';
 import { calculatePartnerContribution } from '../../src/engine/relationshipEngine';
+import { getPrestigeEffects } from '../../src/engine/prestigeEngine';
+import { getEconomicCycleEffects } from '../../src/engine/economyEngine';
+import { getPropertyPortfolioCashFlow } from '../../src/engine/propertyPortfolioSummary';
 import coursesData from '../../src/data/courses.json';
 import FirstStepsCard from '../../src/components/FirstStepsCard';
 import { averageStudentWorkIncome, getStudentStudyDuration, getStudentWorkOption, getStudentWorkTier } from '../../src/engine/studentWork';
@@ -81,6 +84,13 @@ export default function DashboardScreen() {
   const relationshipModeEnabled = useGameStore((s) => s?.relationshipModeEnabled ?? false);
   const relationshipState = useGameStore((s) => s?.relationshipState);
   const lifecycle = useGameStore((s) => s?.lifecycle);
+  const profile = useGameStore((s) => s.profile);
+  const economicCyclePhase = useGameStore((s) => s.economicCycle?.phase ?? 'expansion');
+  const propertyFlow = getPropertyPortfolioCashFlow(
+    properties, state.inflationMultiplier ?? 1,
+    getPrestigeEffects(profile).property_income ?? 0,
+    getEconomicCycleEffects(economicCyclePhase).propertyIncomeMultiplier,
+  );
   const partner = (relationshipState?.activeConnections ?? []).find((item) => item.id === relationshipState?.partnerId) ?? null;
 
   const partTimeJob = useGameStore((s) => s?.partTimeJob ?? false);
@@ -123,7 +133,7 @@ export default function DashboardScreen() {
         : (partTimeJob ? (studentWork?.shortName ?? 'Part-Time') : null));
   const displayIncome = coupleTripActive ? 0 : (isEmployed ? weeklyIncome : (partTimeJob ? averageStudentWorkIncome(studentWork?.id ?? null) : 0));
   const effectivePartnerContribution = coupleTripActive ? 0 : household.contribution;
-  const projectedWeeklyFlow = displayIncome + effectivePartnerContribution - weeklyExpenses;
+  const projectedWeeklyFlow = displayIncome + effectivePartnerContribution + propertyFlow.netCashFlow - weeklyExpenses;
   const globalWeek = ((state.year ?? 1) - 1) * 20 + (state.week ?? 1);
   const weeksUntilTax = 20 - (globalWeek % 20);
   // Succession is the only relevant flow after death; company reminders
@@ -202,7 +212,7 @@ export default function DashboardScreen() {
               {projectedWeeklyFlow >= 0 ? '+' : ''}{formatCurrency(projectedWeeklyFlow)}
               <Text style={styles.flowPerWeek}> /wk</Text>
             </Text>
-            <Text style={styles.flowHint}>Income and household contribution minus recurring weekly costs. Tax settles separately.</Text>
+            <Text style={styles.flowHint}>Estimated wages, household contribution and net property rent after recurring costs. Excludes dividends and one-off transactions. Tax settles separately.</Text>
           </View>
 
           <View style={styles.weeklyMetrics}>
@@ -229,11 +239,12 @@ export default function DashboardScreen() {
             </Pressable>
           </View>
 
-          {effectivePartnerContribution > 0 && (
+          {(effectivePartnerContribution > 0 || properties.length > 0) && (
             <View style={styles.sharedContribution}>
               <Ionicons name="heart-outline" size={14} color={Colors.family} />
               <Text style={styles.sharedContributionText}>
-                {partner?.name ?? 'Partner'} contributes {formatCurrency(effectivePartnerContribution)}/wk to shared costs
+                {effectivePartnerContribution > 0 ? `${partner?.name ?? 'Partner'} contributes ${formatCurrency(effectivePartnerContribution)}/wk${properties.length > 0 ? ' • ' : ''}` : ''}
+                {properties.length > 0 ? `Property net ${propertyFlow.netCashFlow >= 0 ? '+' : ''}${formatCurrency(propertyFlow.netCashFlow)}/wk (rent ${formatCurrency(propertyFlow.grossRent)} − costs ${formatCurrency(propertyFlow.maintenance)})` : ''}
               </Text>
             </View>
           )}
@@ -381,7 +392,7 @@ export default function DashboardScreen() {
           businessAttentionCount={businessAttentionCount}
           businessCrisisCount={businessCrisisCount}
           propertyCount={properties.length}
-          rentalIncome={properties.filter(property => property?.isRentedOut).reduce((total, property) => total + (property?.weeklyIncome ?? 0), 0)}
+          rentalIncome={propertyFlow.grossRent}
           onBusinessesPress={() => router.push('/business')}
           onPropertiesPress={() => router.push('/properties')}
         />}
