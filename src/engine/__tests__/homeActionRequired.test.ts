@@ -19,6 +19,8 @@ describe('Home action-required priorities', () => {
     const result = getHomeRequiredActions({ businesses, cash: 10000, projectedWeeklyFlow: 1200, globalWeek: 40 });
     expect(result).toHaveLength(2);
     expect(result.map(item => item.urgent)).toEqual([true, true]);
+    expect(result[0]).toMatchObject({ businessId: '1', focus: 'decision', route: '/business' });
+    expect(result[1]).toMatchObject({ businessId: '2', focus: 'decision', route: '/business' });
     expect(result[0].detail).toBe('1 week until auto-resolution');
     expect(result[1].detail).toBe('6 weeks until auto-resolution');
   });
@@ -30,6 +32,8 @@ describe('Home action-required priorities', () => {
     const result = getHomeRequiredActions({ businesses, cash: -20, projectedWeeklyFlow: -100, globalWeek: 42 });
     expect(result.map(item => item.id)).toEqual(['decision:1','business-cash:2','personal-cash']);
     expect(result.every(item => item.urgent)).toBe(true);
+    expect(result[1]).toMatchObject({ businessId: '2', focus: 'cash-management', route: '/business' });
+    expect(result[2]).not.toHaveProperty('businessId');
     expect(result.at(-1)?.route).toBe('/loans');
   });
   it('warns only when next-week projected personal cash falls below zero', () => {
