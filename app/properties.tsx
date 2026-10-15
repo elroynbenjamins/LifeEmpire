@@ -90,14 +90,14 @@ export default function PropertiesScreen() {
           accentColor={Colors.business}
         />
 
-        <View style={styles.pixelArtCard}>
+        {(tab !== 'owned' || properties.length === 0) && <View style={styles.pixelArtCard}>
           <Image
             source={tab === 'auctions' ? require('../assets/pixel-art/auctions.png') : require('../assets/pixel-art/real-estate.png')}
             style={styles.pixelArt}
             resizeMode="contain"
             accessibilityLabel={tab === 'auctions' ? 'Pixel art real estate auction' : 'Pixel art real estate portfolio'}
           />
-        </View>
+        </View>}
 
         {/* Owned Properties */}
         {tab === 'owned' && properties.length > 0 && (
@@ -109,7 +109,7 @@ export default function PropertiesScreen() {
             {properties.map((prop) => {
               const rent = getPropertyWeeklyRent(prop, inflationMultiplier, rentBonus, cycleEffects.propertyIncomeMultiplier);
               const maintenance = inflated(prop.weeklyMaintenance ?? 0, inflationMultiplier);
-              const netRent = rent - maintenance;
+              const netRent = (prop.isRentedOut ? rent : 0) - maintenance;
               const invested = prop.purchasePrice + (prop.inspectionCostPaid ?? 0);
               const expanded = expandedPropertyId === prop.id;
               return (
@@ -143,7 +143,7 @@ export default function PropertiesScreen() {
                     <View style={styles.ownedCompactStat}>
                       <Text style={styles.miniLabel}>Net / wk</Text>
                       <Text style={[styles.ownedCompactValue, { color: netRent >= 0 ? Colors.primary : Colors.negative }]}
-                        numberOfLines={1} adjustsFontSizeToFit>{netRent >= 0 ? '+' : ''}{formatCurrency(prop.isRentedOut ? netRent : -maintenance)}</Text>
+                        numberOfLines={1} adjustsFontSizeToFit>{netRent >= 0 ? '+' : ''}{formatCurrency(netRent)}</Text>
                     </View>
                     <View style={styles.ownedCompactStat}>
                       <Text style={styles.miniLabel}>Condition</Text>
