@@ -19,10 +19,10 @@ describe('Home action card', () => {
     expect(screen.getByText('Company crisis')).toBeTruthy();
     expect(screen.queryByText('Other decision')).toBeNull();
     fireEvent.press(screen.getByText('Cash warning'));
-    expect(onOpen).toHaveBeenCalledWith('/loans');
+    expect(onOpen).toHaveBeenCalledWith(actions[1]);
     fireEvent.press(screen.getByText('Show all 3 actions'));
     expect(screen.getByText('Other decision')).toBeTruthy();
     fireEvent.press(screen.getByText('Other decision'));
-    expect(onOpen).toHaveBeenCalledWith('/business');
+    expect(onOpen).toHaveBeenCalledWith(actions[2]);
   });
 });
