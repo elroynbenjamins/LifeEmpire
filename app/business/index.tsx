@@ -227,6 +227,7 @@ export default function BusinessPortfolioScreen() {
   const getNetWorthValue = useGameStore((state) => state.getNetWorthValue);
   const setAllBusinessDecisionAutomation = useGameStore((state) => state.setAllBusinessDecisionAutomation);
   const [sortMode, setSortMode] = useState<SortMode>('attention');
+  const [portfolioView, setPortfolioView] = useState<'quick' | 'detailed'>('quick');
   const [managementReportPeriod, setManagementReportPeriod] = useState<CorporateReportPeriod>('quarter');
   const [showEmpireReport, setShowEmpireReport] = useState(false);
   const [showAllInbox, setShowAllInbox] = useState(false);
@@ -460,10 +461,18 @@ export default function BusinessPortfolioScreen() {
         )}
 
         <View style={styles.sectionHeader}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.sectionTitle}>Active Portfolio</Text>
             <Text style={styles.sectionSub}>Sort the empire by what matters right now.</Text>
           </View>
+          {businesses.length > 0 && <Pressable accessibilityRole="button"
+            accessibilityLabel={portfolioView === 'quick' ? 'Show detailed portfolio' : 'Show quick portfolio'}
+            style={styles.portfolioViewToggle}
+            onPress={() => setPortfolioView(current => current === 'quick' ? 'detailed' : 'quick')}>
+            <Ionicons name={portfolioView === 'quick' ? 'list-outline' : 'reorder-two-outline'}
+              size={15} color={Colors.info} />
+            <Text style={styles.portfolioViewToggleText}>{portfolioView === 'quick' ? 'Detailed' : 'Quick'}</Text>
+          </Pressable>}
           <Text style={styles.sectionCount}>{businesses.length}</Text>
         </View>
 
@@ -503,6 +512,47 @@ export default function BusinessPortfolioScreen() {
             const equityReturn = getBusinessEquityReturn(biz);
             const visualStatus = getBusinessVisualStatus(biz, currentYear, currentWeek, inflationMultiplier);
             const risk = biz.acquisition?.initialRisk;
+
+            if (portfolioView === 'quick') {
+              const focus = biz.pendingDecision ? 'decision' : biz.balance < 0 ? 'cash-management' : null;
+              return (
+                <View key={biz.id} style={styles.quickBizShell}>
+                  <Pressable accessibilityRole="button"
+                    accessibilityLabel={`Open ${biz.name} business details`}
+                    onPress={() => router.push(`/business/${biz.id}`)}
+                    style={styles.quickBizMain}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.quickBizName} numberOfLines={1}>{biz.name}</Text>
+                      <Text style={styles.quickBizStatus} numberOfLines={1}>
+                        {getLevelName(biz.level)} · {visualStatus.label}
+                      </Text>
+                    </View>
+                    <View style={styles.quickBizNumber}>
+                      <Text style={styles.quickBizLabel}>Profit / wk</Text>
+                      <Text style={[styles.quickBizFigure, { color: (biz.lastWeekProfit ?? 0) >= 0 ? Colors.primary : Colors.negative }]}
+                        numberOfLines={1} adjustsFontSizeToFit>
+                        {(biz.lastWeekProfit ?? 0) >= 0 ? '+' : ''}{formatCurrency(biz.lastWeekProfit ?? 0)}
+                      </Text>
+                    </View>
+                    <View style={styles.quickBizNumber}>
+                      <Text style={styles.quickBizLabel}>Cash</Text>
+                      <Text style={[styles.quickBizFigure, { color: biz.balance < 0 ? Colors.negative : Colors.textPrimary }]}
+                        numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(biz.balance ?? 0)}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" color={Colors.textMuted} size={15}/>
+                  </Pressable>
+                  {focus && <Pressable accessibilityRole="button" style={styles.quickBizAlert}
+                    onPress={() => router.push({ pathname: '/business/[id]', params: { id: biz.id, focus } })}>
+                    <Ionicons name={focus === 'decision' ? 'alert-circle-outline' : 'wallet-outline'}
+                      size={14} color={Colors.warning}/>
+                    <Text style={styles.quickBizAlertText} numberOfLines={2}>
+                      {focus === 'decision' ? biz.pendingDecision?.title : 'Company cash needs attention'}
+                    </Text>
+                    <Text style={styles.quickBizOpen}>Review</Text>
+                  </Pressable>}
+                </View>
+              );
+            }
 
             return (
               <Pressable
@@ -748,6 +798,20 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   sectionTitle: { color: Colors.textPrimary, fontSize: 16, fontWeight: '800' },
   sectionSub: { color: Colors.textMuted, fontSize: 10, marginTop: 2 },
+  portfolioViewToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 36, paddingHorizontal: 8 },
+  portfolioViewToggleText: { color: Colors.info, fontSize: 11, fontWeight: '800' },
+  quickBizShell: { borderRadius: 10, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    marginBottom: 4, overflow: 'hidden' },
+  quickBizMain: { minHeight: 65, paddingHorizontal: 10, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  quickBizName: { color: Colors.textPrimary, fontSize: 12, fontWeight: '800' },
+  quickBizStatus: { color: Colors.textMuted, fontSize: 10, marginTop: 3 },
+  quickBizNumber: { width: 70, alignItems: 'flex-end', minWidth: 0 },
+  quickBizLabel: { color: Colors.textMuted, fontSize: 9 },
+  quickBizFigure: { color: Colors.textPrimary, fontSize: 11, fontWeight: '800', marginTop: 3 },
+  quickBizAlert: { minHeight: 35, paddingHorizontal: 11, paddingVertical: 6, borderTopWidth: 1,
+    borderTopColor: Colors.cardBorder, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  quickBizAlertText: { flex: 1, minWidth: 0, color: Colors.warning, fontSize: 10, fontWeight: '700' },
+  quickBizOpen: { color: Colors.info, fontSize: 10, fontWeight: '800' },
   sectionCount: { color: Colors.textSecondary, fontSize: 11, fontWeight: '800', backgroundColor: Colors.elevated, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10 },
   historyLink: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 5 },
   historyLinkText: { color: Colors.info, fontSize: 10, fontWeight: '800' },
