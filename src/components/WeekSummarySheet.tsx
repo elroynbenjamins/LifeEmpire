@@ -79,7 +79,11 @@ export default function WeekSummarySheet() {
 
           <View style={styles.modeRow}>
             <Pressable accessibilityRole="switch" accessibilityState={{ checked: weeklyPrefs.compact }}
-              disabled={!weeklyPrefsReady} onPress={() => setWeeklyPrefs(previous => ({ compact: !previous.compact }))}
+              disabled={!weeklyPrefsReady} onPress={() => {
+                setShowCompleteSummary(false);
+                setShowAllHighlights(false);
+                setWeeklyPrefs(previous => ({ compact: !previous.compact }));
+              }}
               style={styles.modeToggle}>
               <Text style={styles.modeText}>{weeklyPrefs.compact ? '✓ ' : '○ '}Compact weekly results</Text>
             </Pressable>
