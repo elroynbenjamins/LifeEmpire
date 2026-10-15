@@ -1,12 +1,13 @@
 import ScrollView from '../../src/components/TutorialScrollView';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../src/theme/colors';
 import ScreenHeader from '../../src/components/ScreenHeader';
 import GameCard from '../../src/components/GameCard';
+import HomeOwnedAssets from '../../src/components/HomeOwnedAssets';
 import ProgressBar from '../../src/components/ProgressBar';
 import GameButton from '../../src/components/GameButton';
 import StatusPill from '../../src/components/StatusPill';
@@ -23,6 +24,7 @@ import achievementsData from '../../src/data/achievements.json';
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const { width: viewportWidth } = useWindowDimensions();
   const advanceWeek = useGameStore((s) => s?.advanceWeek);
   const [advancingWeek, setAdvancingWeek] = useState(false);
   const currentJobId = useGameStore((s) => s?.currentJobId);
@@ -336,35 +338,18 @@ export default function DashboardScreen() {
           </GameCard>
         ) : null}
 
-        {/* Businesses */}
-        {businesses.length > 0 ? (
-          <GameCard title="My Businesses" onPress={() => router.push('/business')}>
-            <Text style={[styles.statValue, { color: Colors.primary }]}>
-              {businesses.length} business{businesses.length !== 1 ? 'es' : ''}
-            </Text>
-            <Text style={styles.statCaption}>
-              Weekly P&L: {(() => { const p = businesses.reduce((t, b) => t + (b?.lastWeekProfit ?? 0), 0); return `${p >= 0 ? '+' : ''}${formatCurrency(p)}`; })()}
-            </Text>
-            {businessAttentionCount > 0 && (
-              <Text style={[styles.statCaption, { color: businessCrisisCount > 0 ? Colors.negative : Colors.warning, fontWeight: '700' }]}>
-                {businessAttentionCount} compan{businessAttentionCount === 1 ? 'y needs' : 'ies need'} attention
-                {businessCrisisCount > 0 ? ` • ${businessCrisisCount} crisis${businessCrisisCount === 1 ? '' : 'es'}` : ''}
-              </Text>
-            )}
-          </GameCard>
-        ) : null}
-
-        {/* Properties */}
-        {properties.length > 0 ? (
-          <GameCard title="Real Estate" onPress={() => router.push('/properties')}>
-            <Text style={[styles.statValue, { color: Colors.primary }]}>
-              {properties.length} propert{properties.length !== 1 ? 'ies' : 'y'}
-            </Text>
-            <Text style={styles.statCaption}>
-              Rental Income: {formatCurrency(properties.filter(p => p?.isRentedOut).reduce((t, p) => t + (p?.weeklyIncome ?? 0), 0))}/wk
-            </Text>
-          </GameCard>
-        ) : null}
+        {/* Owned assets: side by side on phones when both are owned. */}
+        <HomeOwnedAssets
+          viewportWidth={viewportWidth}
+          businessCount={businesses.length}
+          weeklyBusinessProfit={businesses.reduce((total, business) => total + (business?.lastWeekProfit ?? 0), 0)}
+          businessAttentionCount={businessAttentionCount}
+          businessCrisisCount={businessCrisisCount}
+          propertyCount={properties.length}
+          rentalIncome={properties.filter(property => property?.isRentedOut).reduce((total, property) => total + (property?.weeklyIncome ?? 0), 0)}
+          onBusinessesPress={() => router.push('/business')}
+          onPropertiesPress={() => router.push('/properties')}
+        />
 
         {/* Utility Links */}
         <Text style={styles.sectionLabel}>More</Text>
