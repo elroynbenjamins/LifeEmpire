@@ -12,6 +12,7 @@ import { tutorialSnapshot } from './TutorialDock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSlotUiPreferences } from '../hooks/useSlotUiPreferences';
 import { getCompactWeeklyHighlights } from '../engine/compactWeeklyReport';
+import { getWeeklyCashFlowSummary } from '../engine/weeklyCashFlowSummary';
 import {
   WEEKLY_RESULTS_DEFAULTS, readWeeklyResultsPreferences, weeklyResultsStorageKey,
 } from '../engine/homeUiPreferences';
@@ -51,9 +52,7 @@ export default function WeekSummarySheet() {
 
   const topGainer = [...(summary?.stockChanges ?? [])].sort((a, b) => (b?.change ?? 0) - (a?.change ?? 0))?.[0];
   const topLoser = [...(summary?.stockChanges ?? [])].sort((a, b) => (a?.change ?? 0) - (b?.change ?? 0))?.[0];
-  const totalExpenses = (summary?.rentPaid ?? 0) + (summary?.utilityCost ?? 0) + (summary?.foodCost ?? 0) + (summary?.carCost ?? 0) + (summary?.courseCost ?? 0) + (summary?.loanPayments ?? 0) + (summary?.relationshipHouseholdCost ?? 0) + (summary?.familyCost ?? 0) + (summary?.relationshipObligationCost ?? 0);
-  const totalIncome = (summary?.salaryEarned ?? 0) + (summary?.partTimeIncome ?? 0) + (summary?.dividendIncome ?? 0) + (summary?.partnerContribution ?? 0) + (summary?.partnerInheritance ?? 0);
-  const netFlow = totalIncome - totalExpenses - (summary?.taxAmount ?? 0);
+  const { income: totalIncome, expenses: totalExpenses, net: netFlow } = getWeeklyCashFlowSummary(summary);
   const pendingDecisionCount =
     ((summary?.lifeEvent?.type === 'choice' || summary?.lifeEvent?.type === 'opportunity') ? 1 : 0) +
     (summary?.relationshipEventTitle ? 1 : 0) +
@@ -114,6 +113,7 @@ export default function WeekSummarySheet() {
                 <Text style={styles.fullReportText}>{showAllHighlights ? 'Show fewer updates' : 'Show ' + (keyHighlights.length - 4) + ' more updates'}</Text>
               </Pressable>}
             </View>}
+            <Text style={styles.cashBasisNote}>Operating subtotal; one-off transactions may change cash separately.</Text>
             <Pressable accessibilityRole="button" onPress={() => setShowCompleteSummary(true)} style={styles.fullReportButton}>
               <Text style={styles.fullReportText}>Show full weekly report</Text>
             </Pressable>
@@ -149,10 +149,11 @@ export default function WeekSummarySheet() {
             {reportLesson && (
               <View style={styles.pendingDecisionBox}>
                 <Text style={styles.eventDesc}>
-                  This is the week just completed: income minus expenses and tax. Open Financial Breakdown for the bills, or Weekly Activity for events. Your next week's forecast may differ.
+                  This is an operating cash-flow subtotal, including net property income. Trades, business payouts and one-off payments can change your actual cash separately. Open Financial Breakdown or Weekly Activity for more.
                 </Text>
               </View>
             )}
+            <Text style={styles.cashBasisNote}>Operating cash flow includes net property income. Asset purchases, sales, loans, business payouts and other one-time transactions are not included.</Text>
             {/* Inflation / Macro Event */}
             {summary?.inflationEvent && (
               <View style={styles.inflationBox}>
@@ -582,6 +583,7 @@ const styles = StyleSheet.create({
   compactBody: { backgroundColor: Colors.elevated, borderWidth: 1, borderColor: Colors.cardBorder, padding: 12, borderRadius: 12, marginBottom: 10 },
   compactMetrics: { flexDirection: 'row', gap: 12, flexWrap: 'wrap', marginTop: 4 },
   compactMetric: { color: Colors.textSecondary, fontSize: 11 },
+  cashBasisNote: { color: Colors.textMuted, fontSize: 10, lineHeight: 14, marginBottom: 7 },
   compactHighlights: { borderTopWidth: 1, borderTopColor: Colors.cardBorder, marginTop: 10, paddingTop: 8 },
   highlightsToggle: { minHeight: 34, justifyContent: 'center', alignSelf: 'flex-start', marginTop: 4 },
   compactHeading: { color: Colors.warning, fontSize: 11, fontWeight: '800', marginBottom: 3 },
