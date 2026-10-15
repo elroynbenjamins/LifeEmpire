@@ -46,8 +46,8 @@ export function getHomeRequiredActions(input: {
     actions.push({ id: 'personal-cash', title: 'Personal cash is negative',
       detail: 'Review your bank and repayments', route: '/loans', urgent: true });
   } else if (input.cash + input.projectedWeeklyFlow < 0) {
-    actions.push({ id: 'cash-shortfall', title: 'Cash may run short next week',
-      detail: 'Projected cash after recurring costs is below zero', route: '/loans', urgent: true });
+    actions.push({ id: 'cash-shortfall', title: 'Possible cash shortfall next week',
+      detail: 'Based on wages and regular bills, excluding investment and rental income', route: '/loans', urgent: true });
   }
   return actions.sort((a, b) => Number(b.urgent) - Number(a.urgent));
 }
