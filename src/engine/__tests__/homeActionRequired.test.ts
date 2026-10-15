@@ -36,6 +36,16 @@ describe('Home action-required priorities', () => {
     expect(result[2]).not.toHaveProperty('businessId');
     expect(result.at(-1)?.route).toBe('/loans');
   });
+  it('keeps financial danger visible even when the company also has a decision', () => {
+    const actions = getHomeRequiredActions({
+      businesses: [{ id: '7', name: 'Sigma', balance: -500, pendingDecision: decision('crisis', 44) }],
+      cash: 2000, projectedWeeklyFlow: 100, globalWeek: 41,
+    });
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ businessId: '7', focus: 'decision', urgent: true });
+    expect(actions[0].detail).toContain('Company cash is negative');
+  });
+
   it('warns only when next-week projected personal cash falls below zero', () => {
     const base = { businesses: [], cash: 100, projectedWeeklyFlow: -101, globalWeek: 41 };
     expect(getHomeRequiredActions(base)[0].id).toBe('cash-shortfall');
