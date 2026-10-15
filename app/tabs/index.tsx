@@ -221,14 +221,6 @@ export default function DashboardScreen() {
 
         <FirstStepsCard />
 
-        <GameCard variant="subtle" compact eyebrow="OPTIONAL ACTIVITY" title="Empire Cards" accentColor={Colors.business} onPress={() => router.push('/empire-cards')}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Ionicons name="layers-outline" color={Colors.business} size={22} />
-            <Text style={{ flex: 1, color: Colors.textSecondary, fontSize: 12 }}>Build card combinations, recruit CEO Advisors and survive 8 business quarters.</Text>
-            <Ionicons name="chevron-forward" color={Colors.textMuted} size={17} />
-          </View>
-        </GameCard>
-
         {latestAnnualReport && (
           <GameCard
             variant="subtle"
@@ -382,6 +374,7 @@ export default function DashboardScreen() {
           <QuickLink icon="home" label="Lifestyle" onPress={() => router.push('/housing')} />
           <QuickLink icon="trophy" label="Achievements" onPress={() => router.push('/achievements')} color={Colors.warning} />
           <QuickLink icon="card" label="Bank" onPress={() => router.push('/loans')} color={Colors.info} />
+          <QuickLink icon="layers-outline" label="Empire Cards" onPress={() => router.push('/empire-cards')} color={Colors.business} />
           <QuickLink icon="ribbon" label="Prestige" onPress={() => router.push('/prestige')} color={Colors.family} />
           <QuickLink icon="diamond" label="Support" onPress={() => router.push('/support')} color={Colors.premium} notification={loginRewardAvailable} />
           <QuickLink icon="newspaper" label="News" onPress={() => router.push('/news')} color={Colors.warning} />
