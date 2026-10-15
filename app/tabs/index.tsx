@@ -8,6 +8,14 @@ import { Colors } from '../../src/theme/colors';
 import ScreenHeader from '../../src/components/ScreenHeader';
 import GameCard from '../../src/components/GameCard';
 import HomeOwnedAssets from '../../src/components/HomeOwnedAssets';
+import HomeFinancialAssets from '../../src/components/HomeFinancialAssets';
+import HomeActionRequired from '../../src/components/HomeActionRequired';
+import HomeCustomizePanel from '../../src/components/HomeCustomizePanel';
+import { getHomeRequiredActions } from '../../src/engine/homeActionRequired';
+import {
+  HOME_UI_DEFAULTS, HomeUiSection, readHomeUiPreferences, homeUiStorageKey,
+} from '../../src/engine/homeUiPreferences';
+import { useSlotUiPreferences } from '../../src/hooks/useSlotUiPreferences';
 import ProgressBar from '../../src/components/ProgressBar';
 import GameButton from '../../src/components/GameButton';
 import StatusPill from '../../src/components/StatusPill';
@@ -25,6 +33,15 @@ import achievementsData from '../../src/data/achievements.json';
 export default function DashboardScreen() {
   const router = useRouter();
   const { width: viewportWidth } = useWindowDimensions();
+  const activeSlot = useGameStore(s => s.activeSlot ?? 0);
+  const [preferences, setPreferences, preferencesReady] = useSlotUiPreferences(
+    homeUiStorageKey(activeSlot), HOME_UI_DEFAULTS, readHomeUiPreferences,
+  );
+  const [customizing, setCustomizing] = useState(false);
+  const toggleSection = (section: HomeUiSection) => {
+    if (!preferencesReady) return;
+    setPreferences(previous => ({ ...previous, [section]: !previous[section] }));
+  };
   const advanceWeek = useGameStore((s) => s?.advanceWeek);
   const [advancingWeek, setAdvancingWeek] = useState(false);
   const currentJobId = useGameStore((s) => s?.currentJobId);
@@ -46,6 +63,7 @@ export default function DashboardScreen() {
   const unlockedAchievements = useGameStore((s) => s.unlockedAchievements ?? []);
   const state = useGameStore(useShallow((s) => ({
     currentJobId: s.currentJobId,
+    cash: s.cash,
     currentCourseId: s.currentCourseId,
     currentHousingId: s.currentHousingId,
     currentCarId: s.currentCarId,
@@ -107,6 +125,9 @@ export default function DashboardScreen() {
   const projectedWeeklyFlow = displayIncome + effectivePartnerContribution - weeklyExpenses;
   const globalWeek = ((state.year ?? 1) - 1) * 20 + (state.week ?? 1);
   const weeksUntilTax = 20 - (globalWeek % 20);
+  const requiredActions = getHomeRequiredActions({
+    businesses, cash: state.cash ?? 0, projectedWeeklyFlow, globalWeek,
+  });
 
   const tryHaptic = async () => {
     if (Platform.OS !== 'web') {
@@ -142,6 +163,10 @@ export default function DashboardScreen() {
         accentColor={Colors.primary}
         right={(
           <>
+            <Pressable accessibilityRole="button" accessibilityLabel="Customize dashboard"
+              onPress={() => setCustomizing(previous => !previous)} hitSlop={8}>
+              <Ionicons name="options-outline" size={21} color={customizing ? Colors.primary : Colors.textSecondary}/>
+            </Pressable>
             <Pressable style={styles.gemsBadge} onPress={() => router.push('/support')} hitSlop={8}>
               <Ionicons name="diamond" size={14} color={Colors.premium} />
               <Text style={styles.gemsText}>{gems}</Text>
@@ -221,9 +246,11 @@ export default function DashboardScreen() {
           />
         </GameCard>
 
+        {customizing && preferencesReady && <HomeCustomizePanel preferences={preferences} onToggle={toggleSection} />}
+        <HomeActionRequired actions={requiredActions} onOpen={route => router.push(route)} />
         <FirstStepsCard />
 
-        {latestAnnualReport && (
+        {preferences.annualReport && latestAnnualReport && (
           <GameCard
             variant="subtle"
             eyebrow="YEARLY REPORT"
@@ -251,7 +278,7 @@ export default function DashboardScreen() {
           </GameCard>
         )}
 
-        {activePinnedGoals.length > 0 && (
+        {preferences.pinnedGoals && activePinnedGoals.length > 0 && (
           <GameCard
             variant="subtle"
             eyebrow="PERSONAL GOALS"
@@ -298,15 +325,17 @@ export default function DashboardScreen() {
           );
         })() : null}
 
-        <GameCard variant="subtle" compact>
-          <View style={styles.newsRow}>
-            <Ionicons name="newspaper-outline" size={17} color={Colors.warning} />
-            <Text style={styles.newsText} numberOfLines={2}>{currentHeadline}</Text>
-          </View>
-        </GameCard>
+        {preferences.news && !!currentHeadline && (
+          <Pressable accessibilityRole="button" accessibilityLabel="Open market news" onPress={() => router.push('/news')}
+            style={styles.newsCompact}>
+            <Ionicons name="newspaper-outline" size={15} color={Colors.warning}/>
+            <Text style={styles.newsText} numberOfLines={1}>{currentHeadline}</Text>
+            <Ionicons name="chevron-forward" size={14} color={Colors.textMuted}/>
+          </Pressable>
+        )}
 
         {/* Personal Life */}
-        {relationshipModeEnabled && (
+        {preferences.personalLife && relationshipModeEnabled && (
           <GameCard title="Personal Life" onPress={() => router.push('/relationships')}>
             {partner ? (
               <>
@@ -322,24 +351,18 @@ export default function DashboardScreen() {
           </GameCard>
         )}
 
-        {/* Portfolio */}
-        {hasHoldings ? (
-          <GameCard title="Portfolio" onPress={() => router.push('/portfolio')}>
-            <Text style={[styles.statValue, { color: Colors.primary }]}>{formatCurrency(portfolioValue)}</Text>
-            <Text style={styles.statCaption}>{holdings?.length ?? 0} stock(s) owned</Text>
-          </GameCard>
-        ) : null}
-
-        {/* Loans */}
-        {totalLoanDebt > 0 ? (
-          <GameCard title="Active Loans" onPress={() => router.push('/loans')}>
-            <Text style={[styles.statValue, { color: Colors.negative }]}>{formatCurrency(totalLoanDebt)}</Text>
-            <Text style={styles.statCaption}>{loans?.length ?? 0} active loan(s)</Text>
-          </GameCard>
-        ) : null}
+        {preferences.investments && <HomeFinancialAssets
+          viewportWidth={viewportWidth}
+          holdingCount={holdings.length}
+          portfolioValue={portfolioValue}
+          loanCount={loans.length}
+          totalLoanDebt={totalLoanDebt}
+          onPortfolioPress={() => router.push('/portfolio')}
+          onLoansPress={() => router.push('/loans')}
+        />}
 
         {/* Owned assets: side by side on phones when both are owned. */}
-        <HomeOwnedAssets
+        {preferences.ownedAssets && <HomeOwnedAssets
           viewportWidth={viewportWidth}
           businessCount={businesses.length}
           weeklyBusinessProfit={businesses.reduce((total, business) => total + (business?.lastWeekProfit ?? 0), 0)}
@@ -349,7 +372,7 @@ export default function DashboardScreen() {
           rentalIncome={properties.filter(property => property?.isRentedOut).reduce((total, property) => total + (property?.weeklyIncome ?? 0), 0)}
           onBusinessesPress={() => router.push('/business')}
           onPropertiesPress={() => router.push('/properties')}
-        />
+        />}
 
         {/* Utility Links */}
         <Text style={styles.sectionLabel}>More</Text>
@@ -400,8 +423,8 @@ const styles = StyleSheet.create({
   sharedContribution: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 8, backgroundColor: `${Colors.family}10`, marginBottom: 10 },
   sharedContributionText: { flex: 1, color: Colors.textSecondary, fontSize: 11, fontWeight: '600' },
   advanceButton: { marginTop: 2 },
-  newsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  newsText: { color: Colors.textSecondary, fontSize: 12, lineHeight: 17, flex: 1 },
+  newsCompact: { minHeight: 38, borderRadius: 9, borderWidth: 1, borderColor: Colors.cardBorder, backgroundColor: Colors.elevated, marginBottom: 10, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  newsText: { color: Colors.textSecondary, fontSize: 11, lineHeight: 16, flex: 1 },
   statValue: { fontSize: 20, fontWeight: '700' },
   statCaption: { color: Colors.textMuted, fontSize: 12, marginTop: 4 },
   courseCaption: { color: Colors.textSecondary, fontSize: 11, marginTop: 7 },
