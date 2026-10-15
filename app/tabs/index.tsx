@@ -126,7 +126,9 @@ export default function DashboardScreen() {
   const projectedWeeklyFlow = displayIncome + effectivePartnerContribution - weeklyExpenses;
   const globalWeek = ((state.year ?? 1) - 1) * 20 + (state.week ?? 1);
   const weeksUntilTax = 20 - (globalWeek % 20);
-  const requiredActions = getHomeRequiredActions({
+  // Succession is the only relevant flow after death; company reminders
+  // should not nag when regular actions can no longer be taken.
+  const requiredActions = lifecycle?.isDead ? [] : getHomeRequiredActions({
     businesses, cash: state.cash ?? 0, projectedWeeklyFlow, globalWeek,
   });
 
