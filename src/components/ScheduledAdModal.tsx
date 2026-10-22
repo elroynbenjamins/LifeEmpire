@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Colors } from '../theme/colors';
 import useGameStore from '../store/gameStore';
@@ -13,6 +13,7 @@ export default function ScheduledAdModal() {
   const dismiss = useGameStore((state) => state.dismissScheduledAd);
   const adsRemoved = useGameStore((state) => state.profile?.adsRemoved ?? false);
   const [ready, setReady] = useState(false);
+  const nativeRequestInFlight = useRef(false);
   const simulated = shouldSimulateNativeFeatures();
 
   useEffect(() => {
@@ -22,29 +23,41 @@ export default function ScheduledAdModal() {
       const timer = setTimeout(() => setReady(true), 2500);
       return () => clearTimeout(timer);
     }
-    let cancelled = false;
-    (async () => {
-      if (await loadInterstitialAd()) {
-        if (cancelled) return;
-        const shown = await showInterstitialAd(
-          () => { if (!cancelled) dismiss(); },
-          () => { if (!cancelled) setReady(true); },
-        );
-        if (!shown && !cancelled) setReady(true);
-      } else if (!cancelled) setReady(true);
+    // A failed interstitial should never require an extra full-screen tap or
+    // hide pending relationship/business decisions from the player.
+    // Keep one native session alive across transient changes to other modals.
+    if (nativeRequestInFlight.current) return;
+    nativeRequestInFlight.current = true;
+    let cancelledWhileLoading = false;
+    const finish = () => {
+      if (!nativeRequestInFlight.current) return;
+      nativeRequestInFlight.current = false;
+      dismiss();
+    };
+    void (async () => {
+      try {
+        const loaded = await loadInterstitialAd();
+        if (cancelledWhileLoading) {
+          nativeRequestInFlight.current = false;
+          return;
+        }
+        if (!loaded) { finish(); return; }
+        const shown = await showInterstitialAd(finish, finish);
+        if (!shown) finish();
+      } catch {
+        finish();
+      }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelledWhileLoading = true; };
   }, [visible, blocked, simulated, dismiss, adsRemoved]);
 
-  if (!visible || blocked || adsRemoved || (!simulated && !ready)) return null;
+  if (!visible || blocked || adsRemoved || !simulated || !ready) return null;
   return (
     <Modal visible transparent={false} animationType="fade">
       <View style={styles.screen}>
         <Text style={styles.sponsor}>SPONSORED</Text>
         <Text style={styles.title}>Advertisement</Text>
-        <Text style={styles.copy}>{simulated
-          ? 'This simulated ad is shown only in Expo Go and on web.'
-          : 'The advertisement is unavailable right now. You may continue playing.'}</Text>
+        <Text style={styles.copy}>This simulated ad is shown only in Expo Go and on web.</Text>
         <Pressable disabled={!ready} onPress={dismiss} style={[styles.button, !ready && styles.disabled]}>
           <Text style={styles.buttonText}>{ready ? 'Continue' : 'Ad playing...'}</Text>
         </Pressable>
