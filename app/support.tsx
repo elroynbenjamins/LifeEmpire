@@ -11,7 +11,7 @@ import StatusPill from '../src/components/StatusPill';
 import useGameStore from '../src/store/gameStore';
 import { formatCurrency } from '../src/utils/format';
 import { AD_CONFIG } from '../src/services/adConfig';
-import { loadRewardedAd, showRewardedAd } from '../src/services/adManager';
+import { getLastAdIssue, loadRewardedAd, showRewardedAd } from '../src/services/adManager';
 import { AD_GEM_REWARD, GEM_CASH_RATE } from '../src/constants/rewards';
 import { connectStore, disconnectStore, GEM_PRODUCTS, isNativeStoreAvailable, purchaseProduct, REMOVE_ADS_PRODUCT_ID, restoreRemoveAds, StoreProduct } from '../src/services/iapManager';
 import { saveProfile } from '../src/utils/storage';
@@ -114,20 +114,23 @@ export default function SupportScreen() {
     const loaded = await loadRewardedAd('gems');
     if (!loaded) {
       setAdState('error');
-      setAdMessage('Ad unavailable right now. Please try again later.');
+      setAdMessage(`Ad unavailable right now. ${getLastAdIssue() ?? 'Please try again later.'}`);
       setTimeout(() => { setAdState('idle'); setAdMessage(''); }, 3000);
       return;
     }
 
     const shown = await showRewardedAd(() => {
-      grantAdReward?.();
-      setAdState('success');
-      setAdMessage(`Advertisement completed! +${AD_GEM_REWARD} gems`);
+      const granted = grantAdReward?.() ?? false;
+      setAdState(granted ? 'success' : 'error');
+      setAdMessage(granted
+        ? `Advertisement completed! +${AD_GEM_REWARD} gems`
+        : 'Your daily gem limit was already reached; no extra gems were granted.');
+      return granted;
     });
 
     if (!shown) {
       setAdState('error');
-      setAdMessage('No reward earned. Watch the complete ad to receive gems.');
+      setAdMessage(`No reward earned. ${getLastAdIssue() ?? 'Watch the complete ad to receive gems.'}`);
     }
 
     setTimeout(() => { setAdState('idle'); setAdMessage(''); }, 3000);
