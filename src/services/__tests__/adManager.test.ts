@@ -163,6 +163,37 @@ describe('rewarded ad responsiveness', () => {
     expect(reward).toHaveBeenCalledTimes(1);
   });
 
+  test('interstitial show timeout releases stalled ads without blocking the user', async () => {
+    jest.useFakeTimers();
+    const { manager, ads } = getHarness();
+    const load = manager.loadInterstitialAd();
+    await flushNativeModuleLoad();
+    ads.__createdAds[0].emit(ads.AdEventType.LOADED);
+    await load;
+    const closed = jest.fn();
+    const failed = jest.fn();
+    await expect(manager.showInterstitialAd(closed, failed)).resolves.toBe(true);
+    await jest.advanceTimersByTimeAsync(120000);
+    expect(closed).not.toHaveBeenCalled();
+    expect(failed).toHaveBeenCalledTimes(1);
+    await expect(manager.showInterstitialAd(closed, failed)).resolves.toBe(false);
+  });
+
+  test('an SDK reward event only attempts to grant once even if rejected', async () => {
+    const { manager, ads } = getHarness();
+    const load = manager.loadRewardedAd('gems');
+    await flushNativeModuleLoad();
+    ads.__createdAds[0].emit(ads.RewardedAdEventType.LOADED);
+    await load;
+    const reward = jest.fn(() => false);
+    const showing = manager.showRewardedAd(reward);
+    ads.__createdAds[0].emit(ads.RewardedAdEventType.EARNED_REWARD);
+    ads.__createdAds[0].emit(ads.RewardedAdEventType.EARNED_REWARD);
+    ads.__createdAds[0].emit(ads.AdEventType.CLOSED);
+    await expect(showing).resolves.toBe(false);
+    expect(reward).toHaveBeenCalledTimes(1);
+  });
+
   test('explicitly rejected reward claims are not marked successful', async () => {
     const { manager, ads } = getHarness();
     const loaded = manager.loadRewardedAd('gems');
