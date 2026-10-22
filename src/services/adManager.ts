@@ -11,6 +11,7 @@ const REWARDED_LOAD_TIMEOUT_MS = 15000;
 const REWARDED_SHOW_TIMEOUT_MS = 120000;
 const REWARDED_READY_MAX_AGE_MS = 4 * 60 * 1000;
 const INTERSTITIAL_LOAD_TIMEOUT_MS = 15000;
+const INTERSTITIAL_SHOW_TIMEOUT_MS = 120000;
 
 let adState: AdState = 'idle';
 let rewardedAd: any = null;
@@ -167,7 +168,7 @@ export async function showRewardedAd(onReward: () => void | boolean): Promise<bo
   const baseEvents = rewardedBaseEventType;
   setAdState('showing');
 
-  return await new Promise<boolean>(async (resolve) => {
+  return await new Promise<boolean>((resolve) => {
     let settled = false;
     let rewardGranted = false;
     let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -192,6 +193,7 @@ export async function showRewardedAd(onReward: () => void | boolean): Promise<bo
       resolve(earned || rewardGranted);
     };
 
+    try {
     earnSub = ad.addAdEventListener(rewardedEvents.EARNED_REWARD, () => {
       if (rewardGranted || settled) return;
       try {
@@ -212,10 +214,12 @@ export async function showRewardedAd(onReward: () => void | boolean): Promise<bo
       settle(false, 'error');
     }, REWARDED_SHOW_TIMEOUT_MS);
 
-    try {
-      await ad.show();
-    } catch (error) {
+    void Promise.resolve().then(() => ad.show()).catch((error: unknown) => {
       if (!rewardGranted) noteAdIssue('Rewarded ad could not be shown', error);
+      settle(false, 'error');
+    });
+    } catch (error) {
+      noteAdIssue('Rewarded ad event listeners failed', error);
       settle(false, 'error');
     }
   });
@@ -289,12 +293,14 @@ export async function showInterstitialAd(onClosed: () => void, onFailed?: () => 
   interstitialShowing = true;
   let closedSub: Unsubscribe | undefined;
   let errorSub: Unsubscribe | undefined;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
   let finished = false;
   const finish = (shown: boolean) => {
     if (finished) return;
     finished = true;
     closedSub?.();
     errorSub?.();
+    if (timeout) clearTimeout(timeout);
     interstitialShowing = false;
     if (interstitialAd === ad) interstitialAd = null;
     if (shown) onClosed();
@@ -304,6 +310,7 @@ export async function showInterstitialAd(onClosed: () => void, onFailed?: () => 
     const { AdEventType } = await loadGoogleMobileAdsModule();
     closedSub = ad.addAdEventListener(AdEventType.CLOSED, () => finish(true));
     errorSub = ad.addAdEventListener(AdEventType.ERROR, () => finish(false));
+    timeout = setTimeout(() => finish(false), INTERSTITIAL_SHOW_TIMEOUT_MS);
     await ad.show();
     return true;
   } catch {
