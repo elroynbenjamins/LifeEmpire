@@ -121,8 +121,10 @@ export default function SupportScreen() {
       return;
     }
 
+    let rewardRejectedByLimit = false;
     const shown = await showRewardedAd(() => {
       const granted = grantAdReward?.() ?? false;
+      rewardRejectedByLimit = !granted;
       setAdState(granted ? 'success' : 'error');
       setAdMessage(granted
         ? `Advertisement completed! +${AD_GEM_REWARD} gems`
@@ -130,7 +132,7 @@ export default function SupportScreen() {
       return granted;
     });
 
-    if (!shown) {
+    if (!shown && !rewardRejectedByLimit) {
       setAdState('error');
       setAdMessage(`No reward earned. ${getLastAdIssue() ?? 'Watch the complete ad to receive gems.'}`);
     }
