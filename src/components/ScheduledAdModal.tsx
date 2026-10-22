@@ -29,6 +29,7 @@ export default function ScheduledAdModal() {
     if (nativeRequestInFlight.current) return;
     nativeRequestInFlight.current = true;
     let cancelledWhileLoading = false;
+    let nativeShowStarted = false;
     const finish = () => {
       if (!nativeRequestInFlight.current) return;
       nativeRequestInFlight.current = false;
@@ -42,13 +43,17 @@ export default function ScheduledAdModal() {
           return;
         }
         if (!loaded) { finish(); return; }
+        nativeShowStarted = true;
         const shown = await showInterstitialAd(finish, finish);
         if (!shown) finish();
       } catch {
         finish();
       }
     })();
-    return () => { cancelledWhileLoading = true; };
+    return () => {
+      cancelledWhileLoading = true;
+      if (!nativeShowStarted) nativeRequestInFlight.current = false;
+    };
   }, [visible, blocked, simulated, dismiss, adsRemoved]);
 
   if (!visible || blocked || adsRemoved || !simulated || !ready) return null;
