@@ -109,6 +109,72 @@ describe('rewarded ad responsiveness', () => {
     expect(manager.getAdState()).toBe('ready');
   });
 
+  test('a ready ad can be reused by the same placement instead of failing', async () => {
+    const { manager, ads } = getHarness();
+    const load = manager.loadRewardedAd('education');
+    await flushNativeModuleLoad();
+    ads.__createdAds[0].emit(ads.RewardedAdEventType.LOADED);
+    await expect(load).resolves.toBe(true);
+    await expect(manager.loadRewardedAd('education')).resolves.toBe(true);
+    expect(ads.__createdAds).toHaveLength(1);
+  });
+
+  test('a ready ad for a different placement is replaced instead of blocking rewards', async () => {
+    const { manager, ads } = getHarness();
+    const first = manager.loadRewardedAd('education');
+    await flushNativeModuleLoad();
+    ads.__createdAds[0].emit(ads.RewardedAdEventType.LOADED);
+    await expect(first).resolves.toBe(true);
+
+    const next = manager.loadRewardedAd('gems');
+    await flushNativeModuleLoad();
+    expect(ads.__createdAds).toHaveLength(2);
+    ads.__createdAds[1].emit(ads.RewardedAdEventType.LOADED);
+    await expect(next).resolves.toBe(true);
+  });
+
+  test('a stale ready ad is discarded and reloaded for the same placement', async () => {
+    jest.useFakeTimers();
+    const { manager, ads } = getHarness();
+    const first = manager.loadRewardedAd('gems');
+    await flushNativeModuleLoad();
+    ads.__createdAds[0].emit(ads.RewardedAdEventType.LOADED);
+    await expect(first).resolves.toBe(true);
+
+    await jest.advanceTimersByTimeAsync(4 * 60 * 1000);
+    const next = manager.loadRewardedAd('gems');
+    await flushNativeModuleLoad();
+    expect(ads.__createdAds).toHaveLength(2);
+    ads.__createdAds[1].emit(ads.RewardedAdEventType.LOADED);
+    await expect(next).resolves.toBe(true);
+  });
+
+  test('a reward already granted is not reported as lost after a native show error', async () => {
+    const { manager, ads } = getHarness();
+    const loaded = manager.loadRewardedAd('gems');
+    await flushNativeModuleLoad();
+    ads.__createdAds[0].emit(ads.RewardedAdEventType.LOADED);
+    await loaded;
+    const reward = jest.fn(() => true);
+    const showing = manager.showRewardedAd(reward);
+    ads.__createdAds[0].emit(ads.RewardedAdEventType.EARNED_REWARD);
+    ads.__createdAds[0].emit(ads.AdEventType.ERROR);
+    await expect(showing).resolves.toBe(true);
+    expect(reward).toHaveBeenCalledTimes(1);
+  });
+
+  test('explicitly rejected reward claims are not marked successful', async () => {
+    const { manager, ads } = getHarness();
+    const loaded = manager.loadRewardedAd('gems');
+    await flushNativeModuleLoad();
+    ads.__createdAds[0].emit(ads.RewardedAdEventType.LOADED);
+    await loaded;
+    const showing = manager.showRewardedAd(() => false);
+    ads.__createdAds[0].emit(ads.RewardedAdEventType.EARNED_REWARD);
+    ads.__createdAds[0].emit(ads.AdEventType.CLOSED);
+    await expect(showing).resolves.toBe(false);
+  });
+
   test('a failed load releases the single-flight lock so the player can retry', async () => {
     const { manager, ads } = getHarness();
 
