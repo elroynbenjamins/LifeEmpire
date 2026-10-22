@@ -9,12 +9,16 @@ type Unsubscribe = () => void;
 
 const REWARDED_LOAD_TIMEOUT_MS = 15000;
 const REWARDED_SHOW_TIMEOUT_MS = 120000;
+const REWARDED_READY_MAX_AGE_MS = 4 * 60 * 1000;
 const INTERSTITIAL_LOAD_TIMEOUT_MS = 15000;
 
 let adState: AdState = 'idle';
 let rewardedAd: any = null;
 let rewardedAdEventType: any = null;
 let rewardedBaseEventType: any = null;
+let rewardedPlacement: RewardedAdPlacement | null = null;
+let rewardedReadyAt = 0;
+let lastAdIssue: string | null = null;
 let listeners: Listener[] = [];
 let interstitialAd: any = null;
 let interstitialLoading = false;
@@ -26,6 +30,8 @@ function setAdState(next: AdState) {
 }
 
 function clearRewardedAd(nextState: AdState) {
+  rewardedPlacement = null;
+  rewardedReadyAt = 0;
   rewardedAd = null;
   rewardedAdEventType = null;
   rewardedBaseEventType = null;
@@ -44,19 +50,39 @@ export function getAdState(): AdState {
   return adState;
 }
 
+/** Safe status for user-initiated troubleshooting (no ad or account identifiers). */
+export function getLastAdIssue(): string | null { return lastAdIssue; }
+
+function noteAdIssue(phase: string, error?: unknown) {
+  const code = error && typeof error === 'object' && 'code' in error &&
+    (typeof error.code === 'number' || typeof error.code === 'string')
+    ? String(error.code).slice(0, 40) : '';
+  lastAdIssue = code ? `${phase} (code ${code})` : phase;
+}
+
 export function subscribeAdState(fn: Listener): () => void {
   listeners.push(fn);
   return () => { listeners = listeners.filter((listener) => listener !== fn); };
 }
 
 export async function loadRewardedAd(placement: RewardedAdPlacement): Promise<boolean> {
-  // Keep rewarded ads single-flight across every placement. A second screen
-  // cannot replace the ad instance while Education/Support/Business is loading.
-  if (adState === 'loading' || adState === 'ready' || adState === 'showing') return false;
+  // A ready ad may survive screen navigation. Reuse it only for the placement
+  // that requested it, otherwise discard it rather than block every other reward.
+  // Never interrupt an ad currently loading or showing.
+  if (adState === 'loading' || adState === 'showing') {
+    noteAdIssue('Another rewarded ad is still in progress');
+    return false;
+  }
+  if (adState === 'ready') {
+    if (rewardedPlacement === placement && Date.now() - rewardedReadyAt < REWARDED_READY_MAX_AGE_MS) return true;
+    clearRewardedAd('idle');
+  }
+  lastAdIssue = null;
   setAdState('loading');
 
   try {
     if (!(await canRequestAds())) {
+      noteAdIssue('Advertising unavailable: consent or SDK initialization');
       clearRewardedAd('error');
       return false;
     }
@@ -94,33 +120,47 @@ export async function loadRewardedAd(placement: RewardedAdPlacement): Promise<bo
 
         if (success) {
           rewardedAd = ad;
+          rewardedPlacement = placement;
+          rewardedReadyAt = Date.now();
+          lastAdIssue = null;
           rewardedAdEventType = RewardedAdEventType;
           rewardedBaseEventType = AdEventType;
           setAdState('ready');
         } else {
+          if (!lastAdIssue) noteAdIssue('Rewarded ad could not load');
           clearRewardedAd('error');
         }
         resolve(success);
       };
 
       loadSub = ad.addAdEventListener(RewardedAdEventType.LOADED, () => settle(true));
-      errorSub = ad.addAdEventListener(AdEventType?.ERROR ?? 'error', () => settle(false));
-      timeout = setTimeout(() => settle(false), REWARDED_LOAD_TIMEOUT_MS);
+      errorSub = ad.addAdEventListener(AdEventType?.ERROR ?? 'error', (error: unknown) => {
+        noteAdIssue('Rewarded ad load failed', error);
+        settle(false);
+      });
+      timeout = setTimeout(() => { noteAdIssue('Rewarded ad load timed out'); settle(false); }, REWARDED_LOAD_TIMEOUT_MS);
 
       try {
         ad.load();
-      } catch {
+      } catch (error) {
+        noteAdIssue('Rewarded ad load threw', error);
         settle(false);
       }
     });
-  } catch {
+  } catch (error) {
+    noteAdIssue('Rewarded ad initialization failed', error);
     clearRewardedAd('error');
     return false;
   }
 }
 
-export async function showRewardedAd(onReward: () => void): Promise<boolean> {
+export async function showRewardedAd(onReward: () => void | boolean): Promise<boolean> {
   if (adState !== 'ready' || !rewardedAd || !rewardedAdEventType) return false;
+  if (Date.now() - rewardedReadyAt >= REWARDED_READY_MAX_AGE_MS) {
+    noteAdIssue('Rewarded ad expired before showing');
+    clearRewardedAd('error');
+    return false;
+  }
 
   const ad = rewardedAd;
   const rewardedEvents = rewardedAdEventType;
@@ -147,25 +187,35 @@ export async function showRewardedAd(onReward: () => void): Promise<boolean> {
       settled = true;
       cleanup();
       clearRewardedAd(nextState);
-      resolve(earned);
+      // Once granted by the SDK, an ad error/late close must not tell the
+      // screen the user failed to earn a reward.
+      resolve(earned || rewardGranted);
     };
 
     earnSub = ad.addAdEventListener(rewardedEvents.EARNED_REWARD, () => {
-      if (rewardGranted) return;
-      rewardGranted = true;
+      if (rewardGranted || settled) return;
       try {
-        onReward();
-      } catch {
-        // Reward delivery should never strand the native ad in a busy state.
+        // Explicit false means the game rejected an ineligible claim; void
+        // callbacks remain valid for education and business unlocks.
+        rewardGranted = onReward() !== false;
+      } catch (error) {
+        noteAdIssue('The ad completed but the reward could not be applied', error);
       }
     });
     closeSub = ad.addAdEventListener(baseEvents?.CLOSED ?? 'closed', () => settle(rewardGranted, 'idle'));
-    errorSub = ad.addAdEventListener(baseEvents?.ERROR ?? 'error', () => settle(false, 'error'));
-    timeout = setTimeout(() => settle(false, 'error'), REWARDED_SHOW_TIMEOUT_MS);
+    errorSub = ad.addAdEventListener(baseEvents?.ERROR ?? 'error', (error: unknown) => {
+      if (!rewardGranted) noteAdIssue('Rewarded ad playback failed', error);
+      settle(false, 'error');
+    });
+    timeout = setTimeout(() => {
+      if (!rewardGranted) noteAdIssue('Rewarded ad playback timed out');
+      settle(false, 'error');
+    }, REWARDED_SHOW_TIMEOUT_MS);
 
     try {
       await ad.show();
-    } catch {
+    } catch (error) {
+      if (!rewardGranted) noteAdIssue('Rewarded ad could not be shown', error);
       settle(false, 'error');
     }
   });
