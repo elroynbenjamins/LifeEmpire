@@ -17,7 +17,7 @@ import { connectStore, disconnectStore, GEM_PRODUCTS, isNativeStoreAvailable, pu
 import { saveProfile } from '../src/utils/storage';
 import { showGameDialog } from '../src/components/GameDialog';
 import { fulfillPurchase } from '../src/services/purchaseFulfillment';
-import { showAdPrivacyOptions } from '../src/services/adPrivacyManager';
+import { canRequestAds, showAdPrivacyOptions } from '../src/services/adPrivacyManager';
 import { shouldSimulateNativeFeatures } from '../src/services/runtimeEnvironment';
 import { REMOVE_ADS_DAILY_GEM_REWARD_AMOUNT } from '../src/services/adRewardEntitlements';
 
@@ -38,6 +38,8 @@ export default function SupportScreen() {
   const [purchaseMessage, setPurchaseMessage] = useState('');
   const [purchasing, setPurchasing] = useState(false);
   const [privacyMessage, setPrivacyMessage] = useState('');
+  const [adDiagnostic, setAdDiagnostic] = useState('');
+  const [checkingAd, setCheckingAd] = useState(false);
   const [loginMessage, setLoginMessage] = useState('');
   const [activeTab, setActiveTab] = useState<'rewards' | 'store' | 'help'>('rewards');
 
@@ -162,6 +164,27 @@ export default function SupportScreen() {
       setPurchaseMessage('Purchases could not be restored right now.');
     } finally {
       setPurchasing(false);
+    }
+  };
+
+  const handleAdDiagnostic = async () => {
+    if (checkingAd) return;
+    setCheckingAd(true);
+    try {
+      if (adsRemoved) {
+        setAdDiagnostic('Remove Ads is active. Advertisements are intentionally disabled; ad-free rewards remain available.');
+      } else if (useSimulatedAd) {
+        setAdDiagnostic('This is a web or Expo Go session. Native AdMob ads require an installed Android/iOS build.');
+      } else {
+        const allowed = await canRequestAds();
+        setAdDiagnostic(allowed
+          ? 'AdMob SDK and consent are ready. Actual ad availability depends on network access and Google ad inventory.'
+          : 'AdMob is not ready. Check your connection and advertising privacy settings, then retry.');
+      }
+    } catch {
+      setAdDiagnostic('Could not check advertising setup. Check your connection and try again.');
+    } finally {
+      setCheckingAd(false);
     }
   };
 
@@ -361,6 +384,21 @@ export default function SupportScreen() {
 
         {activeTab === 'help' && (
           <>
+        <GameCard title="Ad Troubleshooting">
+          <Text style={styles.desc}>If rewarded ads are not loading, check whether this installation can request ads. No reward is consumed by this check.</Text>
+          <Text style={styles.adDiagnosticMeta}>
+            Mode: {useSimulatedAd ? 'Web / Expo Go simulation' : AD_CONFIG.USE_TEST_ADS ? 'Google test ads' : 'Live Google AdMob'}
+          </Text>
+          <Pressable accessibilityRole="button" disabled={checkingAd} style={[styles.adDiagnosticBtn, checkingAd && styles.disabledBtn]}
+            onPress={handleAdDiagnostic}>
+            <Ionicons name="refresh-circle-outline" size={18} color={Colors.white}/>
+            <Text style={styles.adDiagnosticBtnText}>{checkingAd ? 'Checking…' : 'Check ad setup'}</Text>
+          </Pressable>
+          {adDiagnostic !== '' && <Text style={styles.purchaseMessage}>{adDiagnostic}</Text>}
+          {!!getLastAdIssue() && <Text style={styles.adDiagnosticMeta}>Last ad issue: {getLastAdIssue()}</Text>}
+          <Text style={styles.adDiagnosticMeta}>If AdMob is ready but ads never fill, contact support and mention this status and the last ad issue.</Text>
+        </GameCard>
+
         <GameCard title="Advertising Privacy">
           <Text style={styles.desc}>Review or change the consent choices used by Google AdMob.</Text>
           <View style={styles.privacyActions}>
@@ -401,6 +439,10 @@ const styles = StyleSheet.create({
   adSupportNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: Colors.elevated, borderRadius: 10, padding: 12, marginBottom: 12 },
   adSupportText: { flex: 1, color: Colors.textSecondary, fontSize: 13, lineHeight: 18 },
   testAdLabel: { color: Colors.warning, fontSize: 12, fontWeight: '700', textAlign: 'center', marginBottom: 10 },
+  adDiagnosticMeta: { color: Colors.textMuted, fontSize: 11, lineHeight: 17, marginBottom: 8 },
+  adDiagnosticBtn: { alignSelf: 'flex-start', minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 7,
+    backgroundColor: Colors.premium, borderRadius: 9, paddingHorizontal: 12, marginBottom: 6 },
+  adDiagnosticBtnText: { color: Colors.white, fontSize: 12, fontWeight: '700' },
   privacyActions: { gap: 10 },
   disabledBtn: { opacity: 0.5 },
   packRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.elevated, borderRadius: 10, padding: 14, marginBottom: 8 },
