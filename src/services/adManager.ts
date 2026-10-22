@@ -171,6 +171,7 @@ export async function showRewardedAd(onReward: () => void | boolean): Promise<bo
   return await new Promise<boolean>((resolve) => {
     let settled = false;
     let rewardGranted = false;
+    let rewardProcessed = false;
     let timeout: ReturnType<typeof setTimeout> | null = null;
     let earnSub: Unsubscribe | null = null;
     let closeSub: Unsubscribe | null = null;
@@ -195,7 +196,8 @@ export async function showRewardedAd(onReward: () => void | boolean): Promise<bo
 
     try {
     earnSub = ad.addAdEventListener(rewardedEvents.EARNED_REWARD, () => {
-      if (rewardGranted || settled) return;
+      if (rewardProcessed || settled) return;
+      rewardProcessed = true;
       try {
         // Explicit false means the game rejected an ineligible claim; void
         // callbacks remain valid for education and business unlocks.
