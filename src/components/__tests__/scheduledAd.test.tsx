@@ -36,13 +36,31 @@ test('Remove Ads never requests a scheduled ad', async () => {
   expect(useGameStore.getState().dismissScheduledAd).toHaveBeenCalled();
 });
 
-test('native show failure keeps the fallback visible in economy-only mode', async () => {
+test('native show failure is skipped instead of blocking the game with a fallback page', async () => {
   (showInterstitialAd as jest.Mock).mockImplementationOnce(async (_onClosed, onFailed) => {
     onFailed();
     return false;
   });
   useGameStore.setState({ relationshipModeEnabled: false, showSummary: false });
   const view = render(<ScheduledAdModal />);
-  await waitFor(() => expect(view.getByText('Advertisement')).toBeTruthy());
-  expect(useGameStore.getState().dismissScheduledAd).not.toHaveBeenCalled();
+  await waitFor(() => expect(useGameStore.getState().dismissScheduledAd).toHaveBeenCalledTimes(1));
+  expect(view.queryByText('Advertisement')).toBeNull();
+});
+
+test('unavailable interstitial load automatically resumes gameplay', async () => {
+  (loadInterstitialAd as jest.Mock).mockResolvedValueOnce(false);
+  useGameStore.setState({ showSummary: false });
+  render(<ScheduledAdModal />);
+  await waitFor(() => expect(useGameStore.getState().dismissScheduledAd).toHaveBeenCalledTimes(1));
+  expect(showInterstitialAd).not.toHaveBeenCalled();
+});
+
+test('successful native close dismisses the scheduled ad once', async () => {
+  (showInterstitialAd as jest.Mock).mockImplementationOnce(async (onClosed) => {
+    onClosed();
+    return true;
+  });
+  useGameStore.setState({ showSummary: false });
+  render(<ScheduledAdModal />);
+  await waitFor(() => expect(useGameStore.getState().dismissScheduledAd).toHaveBeenCalledTimes(1));
 });
